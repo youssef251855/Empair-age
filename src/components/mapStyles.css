@@ -1,0 +1,132 @@
+/* 
+ * Style overrides and premium visual classes for Leaflet military tactical map
+ * Empire Age: Tactical World Map Styles
+ */
+
+/* Map container styling */
+.empire-leaflet-map {
+  background: #020617 !important;
+  border-radius: 12px;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8), 0 10px 30px rgba(0, 0, 0, 0.6);
+  cursor: crosshair;
+}
+
+/* Custom Tactical Leaflet Tooltip */
+.tactical-tooltip {
+  background: rgba(11, 15, 25, 0.96) !important;
+  border: 1px solid rgba(245, 158, 11, 0.4) !important;
+  color: #f8fafc !important;
+  font-family: 'Cairo', 'Inter', sans-serif !important;
+  font-size: 11px !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+  white-space: nowrap;
+}
+
+.tactical-tooltip::before {
+  border-right-color: rgba(11, 15, 25, 0.96) !important;
+  border-left-color: rgba(11, 15, 25, 0.96) !important;
+}
+
+/* Province Polygon Hover & Outline effects */
+.province-polygon {
+  transition: fill-opacity 0.2s ease, stroke-width 0.15s ease, filter 0.2s ease;
+  outline: none;
+}
+
+.province-polygon:hover {
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.6));
+  stroke-dasharray: 4, 4;
+}
+
+/* Custom Marker Pulsing for selected province or capitals */
+.map-glow-pulse {
+  position: relative;
+}
+
+.map-glow-pulse::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.4);
+  animation: map-ping 1.8s infinite ease-in-out;
+}
+
+@keyframes map-ping {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* Leaflet control container overrides for dark theme */
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+.leaflet-bar a {
+  background-color: #111827 !important;
+  color: #cbd5e1 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.2s ease;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1f2937 !important;
+  color: #f59e0b !important;
+}
+
+.leaflet-control-zoom {
+  border-radius: 6px !important;
+  overflow: hidden;
+}
+
+/* Attributions styling */
+.leaflet-container .leaflet-control-attribution {
+  background: rgba(11, 15, 25, 0.65) !important;
+  color: #64748b !important;
+  font-size: 9px !important;
+}
+
+.leaflet-container .leaflet-control-attribution a {
+  color: #94a3b8 !important;
+}
+
+/* Tactical Map Labels (Conflict of Nations Style) */
+.tactical-label-wrapper {
+  background: transparent !important;
+  border: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: none !important;
+}
+
+.tactical-map-label {
+  text-shadow: 
+    0px 2px 4px rgba(0,0,0,1),  
+    0px 0px 8px rgba(0,0,0,1),
+    0px 0px 10px rgba(0,0,0,0.9);
+  color: #f8fafc;
+  font-family: 'Cairo', 'Inter', 'JetBrains Mono', 'Fira Code', monospace;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  pointer-events: none;
+  font-weight: 900;
+  font-size: 14px !important;
+}
+
+/* Tactical Units Layer */
+.unit-marker {
+  transition: transform 0.5s linear, opacity 0.3s ease !important;
+  will-change: transform, opacity;
+}
+

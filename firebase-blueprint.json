@@ -1,0 +1,150 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a player account in the system",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "countryId": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Country": {
+      "title": "Country",
+      "description": "Represents a dynamic nation details governed by a player",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "flagUrl": { "type": "string" },
+        "color": { "type": "string" },
+        "description": { "type": "string" },
+        "capital": { "type": "string" },
+        "leaderName": { "type": "string" },
+        "gold": { "type": "number" },
+        "oil": { "type": "number" },
+        "iron": { "type": "number" },
+        "food": { "type": "number" },
+        "electricity": { "type": "number" },
+        "population": { "type": "number" },
+        "unemploymentRate": { "type": "number" },
+        "taxRate": { "type": "number" },
+        "allianceId": { "type": "string" },
+        "allianceName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastHarvestTime": { "type": "string" }
+      },
+      "required": ["id", "userId", "name", "gold", "oil", "iron", "food", "electricity", "population"]
+    },
+    "Territory": {
+      "title": "Territory",
+      "description": "Represents an occupiable map area",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerCountryId": { "type": "string" },
+        "ownerCountryName": { "type": "string" },
+        "flagEmoji": { "type": "string" },
+        "color": { "type": "string" },
+        "posX": { "type": "number" },
+        "posY": { "type": "number" },
+        "type": { "type": "string" },
+        "resourceSpecialty": { "type": "string" },
+        "resourceMultiplier": { "type": "number" }
+      },
+      "required": ["id", "name", "posX", "posY"]
+    },
+    "Alliance": {
+      "title": "Alliance",
+      "description": "Represents an alliance of nations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "tag": { "type": "string" },
+        "description": { "type": "string" },
+        "leaderCountryId": { "type": "string" },
+        "leaderCountryName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "tag", "leaderCountryId"]
+    },
+    "BattleReport": {
+      "title": "BattleReport",
+      "description": "Logging of battle between nations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "seasonId": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "attackerId": { "type": "string" },
+        "attackerName": { "type": "string" },
+        "defenderId": { "type": "string" },
+        "won": { "type": "boolean" }
+      },
+      "required": ["id", "seasonId", "timestamp", "attackerId", "won"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Log of messages for Global, Alliance or Private DMs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderCountryName": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "senderId", "text", "timestamp"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "An active concurrent world war campaign map",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "createdAt", "active"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Access player core credentials and references"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Concurrent world war sessions available to join"
+    },
+    "/countries/{countryId}": {
+      "schema": "Country",
+      "description": "The nation profile and resource counts of players"
+    },
+    "/territories/{territoryId}": {
+      "schema": "Territory",
+      "description": "Global layout of zones that countries occupy"
+    },
+    "/alliances/{allianceId}": {
+      "schema": "Alliance",
+      "description": "Coalitions formed by players"
+    },
+    "/battles/{battleId}": {
+      "schema": "BattleReport",
+      "description": "Conflict dynamic summaries"
+    },
+    "/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Communications and military logs"
+    }
+  }
+}

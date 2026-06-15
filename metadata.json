@@ -1,0 +1,6 @@
+{
+  "name": "Empire Age",
+  "description": "لعبة استراتيجية عالمية متقدمة لإدارة الدول والحروب وبناء الامبراطوريات مع خريطة تفاعلية واقتصاد متكامل ونظام تحالفات ومواسم.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
