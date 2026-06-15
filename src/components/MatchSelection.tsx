@@ -45,7 +45,7 @@ export const MatchSelection: React.FC = () => {
       <header className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between border-b border-slate-800 pb-6 mb-8 gap-4">
         <div className="flex items-center gap-3">
           <img 
-            src="https://yousst4youssef.rf.gd/uploads/file_1781366556_1074_0.png" 
+            src="/icons/logo.png" 
             alt="Empire Age Logo" 
             referrerPolicy="no-referrer"
             className="w-14 h-14 object-contain filter drop-shadow-[0_0_8px_rgba(245,158,11,0.4)] animate-pulse"

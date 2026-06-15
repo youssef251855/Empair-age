@@ -53,7 +53,7 @@ export const ResourceHeader: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2 border-b border-slate-800/50 sm:border-b-0 sm:pb-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <img 
-              src="https://yousst4youssef.rf.gd/uploads/file_1781366556_1074_0.png" 
+              src="/icons/logo.png" 
               alt="Empire Age Logo" 
               referrerPolicy="no-referrer"
               className="w-10 h-10 object-contain filter drop-shadow-[0_0_8px_rgba(245,158,11,0.35)] shrink-0"

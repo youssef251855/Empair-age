@@ -3,9 +3,9 @@ import L from 'leaflet';
 import { MapUnit } from '../types';
 import { listenToUnits } from '../services/unitService';
 
-import soldierImg from '../assets/images/unit_soldier_sprite_1781285256720.jpg';
-import tankImg from '../assets/images/unit_tank_sprite_1781285273442.jpg';
-import jetImg from '../assets/images/unit_jet_sprite_1781285287017.jpg';
+const soldierImg = '/icons/soldier.png';
+const tankImg = '/icons/tank.png';
+const jetImg = '/icons/military_plane.png';
 
 interface UnitLayerProps {
   mapInstance: L.Map | null;

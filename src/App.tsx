@@ -97,7 +97,7 @@ function GameLayout() {
           <div className="absolute w-36 h-36 rounded-full border border-amber-500/10 animate-ping duration-1000" />
           <div className="absolute w-28 h-28 rounded-full border border-amber-500/30 animate-pulse" />
           <img 
-            src="https://yousst4youssef.rf.gd/uploads/file_1781366556_1074_0.png" 
+            src="/icons/logo.png" 
             alt="Empire Age Logo" 
             referrerPolicy="no-referrer"
             className="w-24 h-24 object-contain filter drop-shadow-[0_0_15px_rgba(245,158,11,0.5)] z-10 animate-pulse"
@@ -120,7 +120,7 @@ function GameLayout() {
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <img 
-                  src="https://yousst4youssef.rf.gd/uploads/file_1781366556_1074_0.png" 
+                  src="/icons/logo.png" 
                   alt="Empire Age Logo" 
                   referrerPolicy="no-referrer"
                   className="w-14 h-14 object-contain filter drop-shadow-[0_0_8px_rgba(245,158,11,0.4)] animate-pulse"
