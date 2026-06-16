@@ -18,35 +18,18 @@ import {
 export const LeaderboardTab: React.FC = () => {
   const { countries, territories, alliances } = useGame();
   
-  // Tabs: 'territories' | 'army' | 'richest' | 'alliance'
-  const [boardType, setBoardType] = useState<'territories' | 'army' | 'richest' | 'alliance'>('territories');
+  // Tabs: 'territories' | 'alliance'
+  const [boardType, setBoardType] = useState<'territories' | 'alliance'>('territories');
 
   // Helpers to fetch metrics per country
   const getCountryTerritoriesCount = (cid: string) => {
     return territories.filter(t => t.ownerCountryId === cid).length;
   };
 
-  const getCountryArmyStrength = (armyObj: any) => {
-    if (!armyObj) return 0;
-    return (
-      (armyObj.infantry || 0) * 1 +
-      (armyObj.specialForces || 0) * 3 +
-      (armyObj.tanks || 0) * 10 +
-      (armyObj.artillery || 0) * 8 +
-      (armyObj.jets || 0) * 25
-    );
-  };
-
   // Compile datasets based on active toggle
   const sortedCountries = [...countries].sort((a, b) => {
     if (boardType === 'territories') {
       return getCountryTerritoriesCount(b.id) - getCountryTerritoriesCount(a.id);
-    }
-    if (boardType === 'army') {
-      return getCountryArmyStrength(b.army) - getCountryArmyStrength(a.army);
-    }
-    if (boardType === 'richest') {
-      return b.gold - a.gold;
     }
     return 0;
   });
@@ -153,7 +136,6 @@ export const LeaderboardTab: React.FC = () => {
           ) : (
             sortedCountries.map((c, index) => {
               const landCount = getCountryTerritoriesCount(c.id);
-              const armyStrength = getCountryArmyStrength(c.army);
 
               return (
                 <div 
@@ -186,20 +168,15 @@ export const LeaderboardTab: React.FC = () => {
                   </div>
 
                   {/* Operational stats parameters */}
-                  <div className="grid grid-cols-3 gap-3 text-right">
+                  <div className="grid grid-cols-2 gap-3 text-right">
                     <div className="bg-slate-950/40 p-2 rounded border border-slate-900 text-center min-w-[100px]">
-                      <p className="text-[10px] text-slate-400">الترسانة العسكرية</p>
-                      <p className="text-sm font-black text-red-500 font-mono mt-0.5">{armyStrength.toLocaleString()}</p>
+                      <p className="text-[10px] text-slate-400">ترسانة وخزينة العدو</p>
+                      <p className="text-xs font-black text-slate-500 font-mono mt-0.5 text-center">❓ مجهولة</p>
                     </div>
 
                     <div className="bg-slate-950/40 p-2 rounded border border-slate-900 text-center min-w-[100px]">
                       <p className="text-[10px] text-slate-400">المقاطعات</p>
                       <p className="text-sm font-black text-cyan-400 font-mono mt-0.5">{landCount}</p>
-                    </div>
-
-                    <div className="bg-slate-950/40 p-2 rounded border border-slate-900 text-center min-w-[100px]">
-                      <p className="text-[10px] text-slate-400">الخزانة والذهب</p>
-                      <p className="text-sm font-black text-amber-500 font-mono mt-0.5">{c.gold.toLocaleString()}</p>
                     </div>
                   </div>
 

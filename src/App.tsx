@@ -44,11 +44,35 @@ function GameLayout() {
     registerWithEmail,
     isAdmin,
     selectedMatchId,
-    selectMatch
+    selectMatch,
+    messages
   } = useGame();
 
   // Active tab controllers: 'map' | 'dashboard' | 'alliances' | 'espionage' | 'chat' | 'leaderboards' | 'admin'
   const [activeTab, setActiveTab] = useState<string>('map');
+
+  // Request notifications permission on load
+  React.useEffect(() => {
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Listen for generic new messages for push notifications
+  const prevMessagesLength = React.useRef(messages?.length || 0);
+
+  React.useEffect(() => {
+    if (messages && messages.length > prevMessagesLength.current) {
+      const latestMessage = messages[0]; // Assuming reversed array where latest is 0
+      if (latestMessage && 'Notification' in window && Notification.permission === 'granted' && latestMessage.senderId !== currentUser?.uid) {
+        new Notification(latestMessage.senderCountryName || 'بث عاجل', {
+          body: latestMessage.text,
+          icon: '/icons/logo.png',
+        });
+      }
+    }
+    prevMessagesLength.current = messages?.length || 0;
+  }, [messages, currentUser]);
 
   // Email and Password Login States
   const [emailInput, setEmailInput] = useState('');

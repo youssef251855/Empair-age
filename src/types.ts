@@ -213,7 +213,7 @@ export interface Spy {
   targetCountryId: string;
   targetCountryName: string;
   status: 'active' | 'caught' | 'successful';
-  mission: 'intel' | 'steal_oil' | 'steal_gold' | 'sabotage_defense';
+  mission: 'intel' | 'steal_oil' | 'steal_gold' | 'sabotage_defense' | 'recon';
   logs: string[];
   createdAt: string;
 }

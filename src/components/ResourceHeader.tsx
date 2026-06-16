@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export const ResourceHeader: React.FC = () => {
-  const { currentCountry, logout, activeSeason, territories, harvestLocalTick, selectedMatchId, matches, rechargeCredits } = useGame();
+  const { currentCountry, logout, activeSeason, territories, harvestLocalTick, selectedMatchId, matches, rechargeCredits, messages } = useGame();
 
   if (!currentCountry) return null;
 
@@ -213,6 +213,21 @@ export const ResourceHeader: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Global Operations Chat Ticker */}
+        {messages.length > 0 && (
+          <div className="flex items-center bg-slate-900 border border-slate-700/50 p-1 md:p-1.5 rounded-lg overflow-hidden relative mt-1 md:mt-2 shadow-inner">
+            <span className="shrink-0 bg-blue-600/80 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded text-white font-bold animate-pulse mr-2 whitespace-nowrap shadow-sm border border-blue-500/50">
+              أحدث بث لاسلكي:
+            </span>
+            <div className="flex-1 overflow-hidden whitespace-nowrap text-left" style={{ direction: 'rtl' }}>
+              <div className="inline-block animate-marquee hover:pause whitespace-nowrap w-full pl-[100%] text-[10px] sm:text-xs text-slate-300">
+                <span className="font-extrabold text-amber-400 ml-1">[{messages[0]?.senderCountryName}]:</span>
+                <span className="font-medium">{messages[0]?.text}</span>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

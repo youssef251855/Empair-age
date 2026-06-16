@@ -21,10 +21,9 @@ import {
 } from 'lucide-react';
 
 // Highly-polished tactical warfare units illustration assets
-const infantryImg = '/icons/soldier.png';
-const tankImg = '/icons/tank.png';
-const jetImg = '/icons/military_plane.png';
-// Keeping the original missile image since it was not provided in the requested github icons
+import infantryImg from '../assets/images/infantry_unit_1781367477292.jpg';
+import tankImg from '../assets/images/tank_unit_1781367491965.jpg';
+import jetImg from '../assets/images/fighter_jet_1781367509068.jpg';
 import missileImg from '../assets/images/missile_unit_1781367527035.jpg';
 
 export const DashboardTab: React.FC = () => {

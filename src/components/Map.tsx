@@ -535,10 +535,12 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         p.y += p.vy;
         p.life -= 0.05;
         ctx.beginPath();
-        const radius = Math.min(8, p.life * 1.5);
-        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.fill();
+        const radius = Math.max(0, Math.min(8, p.life * 1.5));
+        if (radius > 0) {
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.fill();
+        }
         return p.life > 0;
       });
 
@@ -946,7 +948,10 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         }
       });
 
-      animFrame = requestAnimationFrame(render);
+      // Throttle for low end devices (approx 30 FPS instead of 60)
+      setTimeout(() => {
+        animFrame = requestAnimationFrame(render);
+      }, 1000 / 30);
     };
 
     render();

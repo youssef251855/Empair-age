@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { Compass, Shield, Users, Calendar, ArrowRight, UserCheck, Plus, Sparkles, AlertTriangle } from 'lucide-react';
+import { Compass, Shield, Users, Calendar, ArrowRight, UserCheck, Plus, Sparkles, AlertTriangle, Copy, Check } from 'lucide-react';
 
 export const MatchSelection: React.FC = () => {
   const { 
@@ -13,12 +13,27 @@ export const MatchSelection: React.FC = () => {
   } = useGame();
 
   const [showJoinLobby, setShowJoinLobby] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = (e: React.MouseEvent, text: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopiedId(text);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Divide matches into: 1) Already Joined, 2) Joinable
   const joinedMatchIds = allMyCountries.map(c => c.matchId).filter(Boolean) as string[];
   
-  const myCampaigns = matches.filter(m => joinedMatchIds.includes(m.id));
-  const availableCampaigns = matches.filter(m => !joinedMatchIds.includes(m.id));
+  const filteredMatches = matches.filter(m => 
+    searchQuery.trim() === '' || 
+    m.id.toLowerCase().includes(searchQuery.trim().toLowerCase()) || 
+    m.id.replace('match_', '').toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
+  const myCampaigns = filteredMatches.filter(m => joinedMatchIds.includes(m.id));
+  const availableCampaigns = filteredMatches.filter(m => !joinedMatchIds.includes(m.id));
 
   // Auto-generator visual countdown helper (12 Hours cycle tracker)
   const getNextGenerationCountdown = () => {
@@ -91,6 +106,18 @@ export const MatchSelection: React.FC = () => {
           </div>
         </div>
 
+        {/* Global Search Bar */}
+        <div className="mb-6 relative max-w-lg mx-auto">
+          <input
+            type="text"
+            placeholder="ابحث عن خريطة باستخدام الـ ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-900/50 border border-slate-800 text-slate-200 text-sm py-3 px-4 rounded-xl focus:outline-none focus:border-amber-500/50 transition-colors placeholder:text-slate-600 text-center dir-ltr"
+            style={{ direction: 'ltr' }}
+          />
+        </div>
+
         {/* Section 1: User's Joined Campaigns */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
@@ -140,9 +167,15 @@ export const MatchSelection: React.FC = () => {
                         <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-bold">
                           نشط ولواء عسكري قائم
                         </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          ID: {match.id.replace('match_', '')}
-                        </span>
+                        <div 
+                          className="flex items-center gap-1.5 bg-slate-900/80 hover:bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full transition-colors"
+                          onClick={(e) => handleCopy(e, match.id)}
+                        >
+                          <span className="text-[10px] text-slate-400 font-mono select-all">
+                            ID: {match.id.replace('match_', '')}
+                          </span>
+                          {copiedId === match.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                        </div>
                       </div>
                       
                       <h3 className="text-base font-black text-slate-100">{match.name}</h3>
@@ -216,9 +249,15 @@ export const MatchSelection: React.FC = () => {
                         <span className="text-[9px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-bold">
                           غزو مفتوح حـالًا
                         </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          ID: {match.id.replace('match_', '')}
-                        </span>
+                        <div 
+                          className="flex items-center gap-1.5 bg-slate-900/80 hover:bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full transition-colors"
+                          onClick={(e) => handleCopy(e, match.id)}
+                        >
+                          <span className="text-[10px] text-slate-400 font-mono select-all">
+                            ID: {match.id.replace('match_', '')}
+                          </span>
+                          {copiedId === match.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-500" />}
+                        </div>
                       </div>
 
                       <h3 className="text-base font-extrabold text-slate-200">{match.name}</h3>

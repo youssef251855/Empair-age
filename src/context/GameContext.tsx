@@ -982,7 +982,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const attAntiAirMod = defJet > 0 ? 2.0 : 0.5;
       const defAntiAirMod = attJet > 0 || attMissile > 0 ? 2.0 : 0.5;
 
-      const totalAttackStrength = 
+      const rawAttackStrength = 
         (attInf * UNIT_DEFS.infantry.power * attInfMod) +
         (attSec * UNIT_DEFS.specialForces.power) +
         (attTan * UNIT_DEFS.tanks.power * attTanMod) +
@@ -990,14 +990,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (attAntiAir * UNIT_DEFS.antiAir.power * attAntiAirMod) +
         (attJet * UNIT_DEFS.jets.power * attJetMod) +
         (attMissile * UNIT_DEFS.missiles.power);
-
-      let totalDefenseStrength = 
+        
+      const rawDefenseStrength = 
         (defInf * UNIT_DEFS.infantry.defense * defInfMod) +
         (defSec * UNIT_DEFS.specialForces.defense) +
         (defTan * UNIT_DEFS.tanks.defense * defTanMod) +
         (defArt * UNIT_DEFS.artillery.defense) +
         (defAntiAir * (UNIT_DEFS.antiAir?.defense || 80) * defAntiAirMod) +
         (defJet * UNIT_DEFS.jets.defense * defJetMod);
+
+      // Add Randomness and Defense Bonus (Defenders have an inherent +20% advantage and randomness ranges from 0.8x to 1.2x)
+      const attackVariance = 0.8 + (Math.random() * 0.4);
+      const defenseVariance = 0.8 + (Math.random() * 0.4);
+      
+      const totalAttackStrength = rawAttackStrength * attackVariance;
+      let totalDefenseStrength = rawDefenseStrength * defenseVariance * 1.2;
 
       // Geographical defense modifier
       if (target.type === 'mountain') {
@@ -1285,54 +1292,99 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Espionage Operations (التجسس)
   const executeEspionage = async (
     targetCountryId: string, 
-    mission: 'intel' | 'steal_oil' | 'steal_gold' | 'sabotage_defense'
+    mission: 'intel' | 'steal_oil' | 'steal_gold' | 'sabotage_defense' | 'recon',
+    isReconPlane: boolean = false
   ) => {
     if (!currentCountry) return;
     const target = countries.find(c => c.id === targetCountryId);
     if (!target) return;
 
-    if (currentCountry.gold < 150) {
-      alert("يتطلب تجنيد وإرسال عميل سري في مهمة خارجية 150 ذهب كتمويل سائل!");
-      return;
+    if (isReconPlane) {
+      if (currentCountry.army.reconPlanes < 1) {
+        alert("يتطلب الاستطلاع الجوي نشر طائرة استطلاع واحدة متوفرة بالاحتياطي المركزي!");
+        return;
+      }
+      if (currentCountry.oil < 100) {
+        alert("تتطلب طلعة الاستطلاع الجوي 100 برميل وقود للطائرات!");
+        return;
+      }
+    } else {
+      if (currentCountry.gold < 150) {
+        alert("يتطلب تجنيد وإرسال عميل سري في مهمة خارجية 150 ذهب كتمويل سائل!");
+        return;
+      }
     }
 
-    // Espionage Chance Formula
-    const detectionRisk = 35; // base percentage risk
+    // Intelligence factors based on target's defense capabilities
+    let detectionRisk = 35; // base percentage risk
+    
+    if (isReconPlane) {
+       // AntiAir logic increases risk for planes
+       const aiPower = target.army.antiAir || 0;
+       detectionRisk = Math.min(85, 20 + aiPower * 2);
+    } else {
+       // Sabotage risk
+       const intelDefense = target.army.specialForces || 0;
+       detectionRisk = Math.min(75, 30 + intelDefense * 0.5);
+    }
+
     const success = Math.random() * 100 > detectionRisk;
     const logs: string[] = [];
 
-    let updatedPlayerGold = currentCountry.gold - 150;
+    let updatedPlayerGold = currentCountry.gold;
+    let updatedPlayerOil = currentCountry.oil;
+    let playerArmyChange = { ...currentCountry.army };
+
+    if (isReconPlane) {
+      updatedPlayerOil -= 100;
+      logs.push(`أقلعت طائرات الاستطلاع (رادار ${currentCountry.name}) لاختراق أجواء [${target.capital}] لمهمة كشف القوات الجبهوية.`);
+    } else {
+      updatedPlayerGold -= 150;
+      logs.push(`تم تفعيل شبكة الجواسيس في عاصمة الهدف: [${target.capital}] لمهمة [${mission}].`);
+    }
+
     let targetChange: Partial<Country> = {};
 
-    logs.push(`تم تفعيل شبكة الجواسيس في عاصمة الهدف: [${target.capital}] لمهمة [${mission}].`);
-
     if (success) {
-      logs.push("نجحت العملية الاستخباراتية بشكل فائق السرية دون إثارة الإنذارات.");
-      if (mission === 'steal_gold') {
-        const stolenGold = Math.floor(target.gold * 0.12);
-        updatedPlayerGold += stolenGold;
-        targetChange.gold = Math.max(0, target.gold - stolenGold);
-        logs.push(`اخترق عميلنا الخزانة العامة للعدو وسرق ما مقداره: ${stolenGold} سبيكة ذهبية عيار 24.`);
-      } else if (mission === 'steal_oil') {
-        const stolenOil = Math.floor(target.oil * 0.15);
-        targetChange.oil = Math.max(0, target.oil - stolenOil);
-        logs.push(`تم تخريب صمامات الاحتياطي واستحواذ الجواسيس على: ${stolenOil} برميل نفط خام.`);
-      } else if (mission === 'intel') {
-        logs.push(`تم نقل هيكل الدفاعات بالكامل وصور الاقمار الصناعية: الجيش يمتلك ${target.army.tanks} دبابات و ${target.army.infantry} جنود بالوحدة المركزية.`);
+      if (isReconPlane) {
+         logs.push("نجحت طلعة الاستطلاع الجوي بالتقاط صور تفصيلية لكامل قواعد وأرتال تحركات الميليشيات عبر الرادار وكشف خريطة الهدف.");
       } else {
-        // Sabotage
-        const damageInfantry = Math.floor(target.army.infantry * 0.2);
-        const newArmyObj = { ...target.army, infantry: Math.max(0, target.army.infantry - damageInfantry) };
-        targetChange.army = newArmyObj;
-        logs.push(`تم زرع متفجرات خلوية في ثكنة الإمداد وتصفية ${damageInfantry} جندي بالسرية.`);
+         logs.push("نجحت العملية الاستخباراتية بشكل فائق السرية دون إثارة الإنذارات وكُشف جزء من الخطط العسكرية.");
+         if (mission === 'steal_gold') {
+           const stolenGold = Math.floor(target.gold * 0.12);
+           updatedPlayerGold += stolenGold;
+           targetChange.gold = Math.max(0, target.gold - stolenGold);
+           logs.push(`اخترق عميلنا الخزانة العامة للعدو وسرق ما مقداره: ${stolenGold} سبيكة ذهبية عيار 24.`);
+         } else if (mission === 'steal_oil') {
+           const stolenOil = Math.floor(target.oil * 0.15);
+           targetChange.oil = Math.max(0, target.oil - stolenOil);
+           logs.push(`تم تخريب صمامات الاحتياطي واستحواذ الجواسيس على: ${stolenOil} برميل نفط خام.`);
+         } else if (mission === 'intel') {
+           logs.push(`تم نقل هيكل الدفاعات بالكامل وصور الاقمار الصناعية: الجيش المركزي للهدف يمتلك ${target.army.tanks} دبابات و ${target.army.infantry} جنود.`);
+         } else {
+           // Sabotage
+           const damageInfantry = Math.floor(target.army.infantry * 0.2);
+           const newArmyObj = { ...target.army, infantry: Math.max(0, target.army.infantry - damageInfantry) };
+           targetChange.army = newArmyObj;
+           logs.push(`تم إضعاف المركز الدفاعي عبر متفجرات خلوية وتصفية ${damageInfantry} جندي بالسرية.`);
+         }
       }
     } else {
-      logs.push("فضيحة مخابراتية! تم رصد وتحديد هوية الجاسوس في قصر الرئاسة وتصفيته بحقل الإعدام.");
+      if (isReconPlane) {
+        logs.push("تم رصد الطائرة الاستطلاعية من قبل رادارات العدو وإسقاطها عبر الدفاعات الجوية الثقيلة!");
+        playerArmyChange.reconPlanes = Math.max(0, playerArmyChange.reconPlanes - 1);
+      } else {
+        logs.push("فضيحة مخابراتية! تم تحديد هوية الجاسوس في قصر الرئاسة وتصفيته وانقطاع الاتصال.");
+      }
     }
 
     // Apply updates
     try {
-      await updateDoc(doc(db, 'countries', currentCountry.id), { gold: updatedPlayerGold });
+      await updateDoc(doc(db, 'countries', currentCountry.id), { 
+        gold: updatedPlayerGold,
+        oil: updatedPlayerOil,
+        army: playerArmyChange
+      });
       if (Object.keys(targetChange).length > 0) {
         await updateDoc(doc(db, 'countries', target.id), targetChange);
       }

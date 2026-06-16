@@ -44,6 +44,14 @@ export const MapTab: React.FC = () => {
 
   useBotEngine();
 
+  const getStrengthEstimate = (amount: number) => {
+    if (amount === 0) return 'خالية';
+    if (amount < 15) return 'ضعيفة';
+    if (amount < 60) return 'متوسطة';
+    if (amount >= 60) return 'كبيرة';
+    return 'مجهولة';
+  };
+
   // Find an owned province to default to if available
   const defaultOwnedTerritory = React.useMemo(() => {
     if (!currentCountry || territories.length === 0) return null;
@@ -56,18 +64,30 @@ export const MapTab: React.FC = () => {
     if (!selectedTerritory || !currentCountry) return false;
     // 1. If we own this territory, yes:
     if (selectedTerritory.ownerCountryId === currentCountry.id) return true;
-    // 2. If it is clashing (active clash), we are either attacker or defending against them, yes:
+    
+    // 2. If it is an ally's territory (Shared Intelligence), yes:
+    if (currentCountry.allianceId && selectedTerritory.ownerCountryId) {
+      const terrOwner = countries.find(c => c.id === selectedTerritory.ownerCountryId);
+      if (terrOwner && terrOwner.allianceId === currentCountry.allianceId) {
+        return true;
+      }
+    }
+
+    // 3. If it is clashing (active clash), we are either attacker or defending against them, yes:
     if (selectedTerritory.battleStatus === 'clashing') return true;
-    // 3. If we have a successful spy mission on their country:
-    const hasSuccessfulSpy = (spies || []).some(spy => 
-      spy.ownerCountryId === currentCountry.id && 
-      spy.targetCountryId === selectedTerritory.ownerCountryId &&
-      spy.status === 'successful'
-    );
+    
+    // 4. If we have a successful spy mission or recon plane on their country:
+    const now = Date.now();
+    const hasSuccessfulSpy = (spies || []).some(spy => {
+      if (spy.ownerCountryId !== currentCountry.id || spy.targetCountryId !== selectedTerritory.ownerCountryId || spy.status !== 'successful') return false;
+      const spyTime = new Date(spy.createdAt).getTime();
+      // Intelligence expires after 5 minutes
+      return (now - spyTime) < (5 * 60 * 1000);
+    });
     if (hasSuccessfulSpy) return true;
 
     return false;
-  }, [selectedTerritory, currentCountry, spies]);
+  }, [selectedTerritory, currentCountry, spies, countries]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Territory[]>([]);
 
@@ -360,6 +380,19 @@ export const MapTab: React.FC = () => {
     }
   };
 
+  const handleReconPlane = async () => {
+    if (!selectedTerritory || !selectedTerritory.ownerCountryId) return;
+    const confirm = window.confirm('هل تريد إرسال طائرة استطلاع للكشف عن خريطة الهدف والتجسس الجوي؟ الطائرة مهددة بالإسقاط.');
+    if (!confirm) return;
+    try {
+      await executeEspionage(selectedTerritory.ownerCountryId, 'recon', true);
+      alert('تم إطلاق طائرة الاستطلاع. راقب تقارير الأخبار!');
+      setTacticalAction('info');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleDiplomacy = async () => {
     if (!selectedTerritory || !selectedTerritory.ownerCountryId) return;
     const confirm = window.confirm(`هل تريد إرسال برقية معاهدة سلام علنية لدولة [${selectedTerritory.ownerCountryName}]؟`);
@@ -606,23 +639,23 @@ export const MapTab: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 bg-slate-950/40 p-3 rounded border border-slate-900">
                 <div className="text-xs flex items-center justify-between p-1 bg-slate-900/60 rounded">
                   <span className="text-slate-400">مشاة نظامية</span>
-                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.infantry || 0) : '❓ مجهول'}</span>
+                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.infantry || 0) : getStrengthEstimate(selectedTerritory.garrison.infantry || 0)}</span>
                 </div>
                 <div className="text-xs flex items-center justify-between p-1 bg-slate-900/60 rounded">
                   <span className="text-purple-400">قوات خاصة</span>
-                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.specialForces || 0) : '❓ مجهول'}</span>
+                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.specialForces || 0) : getStrengthEstimate(selectedTerritory.garrison.specialForces || 0)}</span>
                 </div>
                 <div className="text-xs flex items-center justify-between p-1 bg-slate-900/60 rounded">
                   <span className="text-cyan-400">دبابات</span>
-                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.tanks || 0) : '❓ مجهول'}</span>
+                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.tanks || 0) : getStrengthEstimate(selectedTerritory.garrison.tanks || 0)}</span>
                 </div>
                 <div className="text-xs flex items-center justify-between p-1 bg-slate-900/60 rounded">
                   <span className="text-amber-400">مدفعية جيش</span>
-                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.artillery || 0) : '❓ مجهول'}</span>
+                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.artillery || 0) : getStrengthEstimate(selectedTerritory.garrison.artillery || 0)}</span>
                 </div>
                 <div className="text-xs flex items-center justify-between p-1 col-span-2 bg-slate-900/60 rounded">
-                  <span className="text-rose-400">غطاء جوي (طائرات مقاتلة)</span>
-                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.jets || 0) : '❓ مجهول'}</span>
+                  <span className="text-rose-400">غطاء جوي</span>
+                  <span className="font-mono text-slate-100 font-extrabold">{isGarrisonVisible ? (selectedTerritory.garrison.jets || 0) : getStrengthEstimate(selectedTerritory.garrison.jets || 0)}</span>
                 </div>
               </div>
               {!isGarrisonVisible && (
@@ -789,6 +822,12 @@ export const MapTab: React.FC = () => {
                           سلام 🕊️
                         </button>
                         <button
+                          onClick={() => { setTacticalAction('airstrike'); resetSliders(); }}
+                          className={`flex-1 min-w-[70px] text-[10px] sm:text-xs py-1.5 rounded font-bold cursor-pointer text-center ${tacticalAction === 'airstrike' ? 'bg-orange-600 text-slate-100 font-extrabold shadow-lg animate-pulse' : 'bg-orange-950/40 text-orange-300 border border-orange-900/40'}`}
+                        >
+                          قصف ✈️
+                        </button>
+                        <button
                           onClick={() => { setTacticalAction('negotiate'); resetSliders(); }}
                           className={`flex-1 min-w-[70px] text-[10px] sm:text-xs py-1.5 rounded font-bold cursor-pointer text-center ${tacticalAction === 'negotiate' ? 'bg-amber-600 text-slate-100 font-extrabold shadow-lg animate-pulse' : 'bg-amber-950/40 text-amber-300 border border-amber-900/40'}`}
                         >
@@ -802,8 +841,11 @@ export const MapTab: React.FC = () => {
                     <div className="space-y-3 bg-purple-950/40 border border-purple-800/60 p-3.5 rounded-lg">
                       <p className="text-xs text-purple-300 font-bold mb-2">اختر العملية الاستخباراتية ضد ({selectedTerritory.ownerCountryName}):</p>
                       
+                      <button onClick={handleReconPlane} className="w-full text-xs py-2 bg-indigo-950/40 text-indigo-300 border border-indigo-900/40 hover:bg-indigo-900/50 rounded transition-colors text-right px-3">
+                        🛩️ استطلاع جوي بالطائرات (يكشف الوحدات والتفاصيل)
+                      </button>
                       <button onClick={() => handleEspionage('intel')} className="w-full text-xs py-2 bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 rounded transition-colors text-right px-3">
-                        🕵️ جمع معلومات وتشفير رادار العدو
+                        🕵️ عميل سري: جمع معلومات عن قواتهم
                       </button>
                       <button onClick={() => handleEspionage('steal_gold')} className="w-full text-xs py-2 bg-amber-950/40 text-amber-300 border border-amber-900/40 hover:bg-amber-900/50 rounded transition-colors text-right px-3">
                         💰 قرصنة إلكترونية وسرقة أموال
@@ -814,6 +856,9 @@ export const MapTab: React.FC = () => {
                       <button onClick={() => handleEspionage('sabotage_defense')} className="w-full text-xs py-2 bg-red-950/40 text-red-300 border border-red-900/40 hover:bg-red-900/50 rounded transition-colors text-right px-3">
                         💥 عمل إرهابي لتخريب دفاعات العاصمة
                       </button>
+                      <div className="bg-slate-900 border border-slate-700/50 p-2.5 rounded text-[10px] text-slate-300 mb-2 leading-relaxed mt-2">
+                        ⚠️ إرسال العملاء السريين يتطلب <span className="text-amber-400 font-bold">150 ذهب</span> وتمويل سري. الاستطلاع الجوي يتطلب <span className="text-blue-400 font-bold">1 طائرة استطلاع و 100 نفط</span>.
+                      </div>
                     </div>
                   )}
 
@@ -844,6 +889,24 @@ export const MapTab: React.FC = () => {
                         className="w-full text-xs font-bold py-2 bg-amber-700 hover:bg-amber-600 disabled:opacity-50 text-slate-100 rounded shadow-md transition-colors mt-2"
                       >
                         إرسال الرسالة السرية 📩
+                      </button>
+                    </div>
+                  )}
+
+                  {tacticalAction === 'airstrike' && (
+                    <div className="space-y-3 bg-orange-950/40 border border-orange-800/60 p-3.5 rounded-lg text-center">
+                      <p className="text-xs text-orange-300 font-bold mb-2">هل تريد توجيه ضربة جوية أو صاروخية؟</p>
+                      <p className="text-[10px] text-slate-400 mb-3">
+                        سيتم استهداف البنية التحتية والوحدات العسكرية، لكن طائراتك معرضة للإسقاط من قبل الدفاعات الجوية.
+                      </p>
+                      <button onClick={async () => {
+                        try {
+                          await executeAirStrike(selectedTerritory.id);
+                          alert('تم شن الغارة الجوية. تم تحديث سجل العمليات.');
+                          setTacticalAction('info');
+                        } catch (e) { console.error(e); }
+                      }} className="w-full text-xs font-bold py-2 bg-orange-700 text-slate-100 hover:bg-orange-600 rounded shadow-md transition-colors">
+                        إطلاق الغارة الجوية 🚀
                       </button>
                     </div>
                   )}
