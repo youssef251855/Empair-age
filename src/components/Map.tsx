@@ -234,7 +234,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     async function loadAssetsAndSeeding() {
       try {
         setLoading(true);
-        const response = await fetch('/assets/maps/world.geojson');
+        const response = await fetch('/assets/maps/countries-50m.json');
         if (!response.ok) {
           throw new Error('Failed to load map boundary file.');
         }
@@ -249,7 +249,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       } catch (err: any) {
         console.error('Error loading world map: ', err);
         if (isMounted) {
-          setErrorMsg('فشل تحميل حدود الخريطة الجغرافية. تأكد من وجود ملف assets/maps/world.geojson');
+          setErrorMsg('فشل تحميل حدود الخريطة الجغرافية. تأكد من وجود ملف assets/maps/countries-50m.json');
         }
       } finally {
         if (isMounted) {

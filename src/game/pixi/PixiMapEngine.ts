@@ -48,7 +48,12 @@ export class PixiMapEngine {
       preference: 'webgl' // Force WebGL
     });
 
-    options.container.appendChild(this.app.canvas);
+    const canvas = this.app.canvas as HTMLCanvasElement;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    
+    options.container.appendChild(canvas);
 
     // Setup Viewport for panning and zooming
     this.viewport = new Viewport({
@@ -85,9 +90,13 @@ export class PixiMapEngine {
     this.viewport.resize(width, height, 2000, 1100);
   }
 
+  // Map interaction events
+  public onFeatureClick: ((id: string) => void) | null = null;
+
   // Draw political borders and filled shapes using Pixi Graphics
   public renderMapPolygons(features: any[]) {
-    this.mapGraphics.clear();
+    // Clear previous
+    this.mapContainer.removeChildren();
     
     // Virtual Dimensions mapping
     const virtualWidth = 1000;
@@ -106,6 +115,25 @@ export class PixiMapEngine {
       const geo = feat.geometry;
       if (!geo) return;
 
+      const featureId = feat.properties?.id;
+      const featureGraphics = new PIXI.Graphics();
+      featureGraphics.eventMode = 'static';
+      featureGraphics.cursor = 'pointer';
+      
+      featureGraphics.on('pointerdown', () => {
+        if (this.onFeatureClick && featureId) {
+          this.onFeatureClick(featureId);
+        }
+      });
+
+      // Highlight on hover
+      featureGraphics.on('pointerover', () => {
+        featureGraphics.alpha = 0.8;
+      });
+      featureGraphics.on('pointerout', () => {
+        featureGraphics.alpha = 1.0;
+      });
+
       const drawRing = (ring: [number, number][]) => {
          if (ring.length === 0) return;
          const points: number[] = [];
@@ -114,7 +142,7 @@ export class PixiMapEngine {
            points.push(pt.x, pt.y);
          }
          
-         this.mapGraphics.poly(points).fill({ color: 0x0f172a }).stroke({ width: 1, color: 0x1e293b });
+         featureGraphics.poly(points).fill({ color: 0x0f172a }).stroke({ width: 1, color: 0x1e293b });
       };
 
       if (geo.type === 'Polygon') {
@@ -122,6 +150,8 @@ export class PixiMapEngine {
       } else if (geo.type === 'MultiPolygon') {
         geo.coordinates.forEach((poly: any) => poly.forEach((ring: any) => drawRing(ring)));
       }
+
+      this.mapContainer.addChild(featureGraphics);
     });
   }
 

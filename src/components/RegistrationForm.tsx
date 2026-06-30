@@ -45,7 +45,7 @@ export const RegistrationForm: React.FC = () => {
       const doSeed = async () => {
         setSeeding(true);
         try {
-          const response = await fetch('/assets/maps/world.geojson');
+          const response = await fetch('/assets/maps/countries-50m.json');
           if (response.ok) {
             const geojson = await response.json();
             await seedProvincesFromGeoJSON(geojson, selectedMatchId);

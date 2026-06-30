@@ -29,6 +29,7 @@ export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selec
       height: containerRef.current.clientHeight,
       lowGraphics: isLow
     }).then(() => {
+      engine.onFeatureClick = onSelectProvince;
       engineRef.current = engine;
       setEngineReady(true);
     });

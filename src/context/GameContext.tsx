@@ -209,7 +209,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Actually seed the bot countries and territories IMMEDIATELY upon match creation!
           try {
-            const response = await fetch('/assets/maps/world.geojson');
+            const response = await fetch('/assets/maps/countries-50m.json');
             if (response.ok) {
               const geojson = await response.json();
               await seedProvincesFromGeoJSON(geojson, matchId);
