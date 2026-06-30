@@ -557,7 +557,8 @@ export const MapTab: React.FC = () => {
         {/* Real Globe Mapping */}
         <PixiMapWrapper 
           onSelectProvince={(id) => {
-            const terr = territories.find(t => t.id === id);
+            const expectedId = selectedMatchId ? `${selectedMatchId}_${id}` : id;
+            const terr = territories.find(t => t.id === expectedId || t.id === id);
             if (terr) handleSelectSearchResult(terr);
           }} 
           selectedProvinceId={selectedTerritory?.id || null} 

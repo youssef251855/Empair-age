@@ -13,7 +13,9 @@ export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selec
   const engineRef = useRef<PixiMapEngine | null>(null);
   const { territories, loading, selectedMatchId } = useGame();
   const [engineReady, setEngineReady] = useState(false);
+  const [geoJsonFeatures, setGeoJsonFeatures] = useState<any[] | null>(null);
 
+  // 1. Initialize PIXI engine
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -25,8 +27,8 @@ export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selec
 
     engine.init({
       container: containerRef.current,
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+      width: containerRef.current.clientWidth || 800,
+      height: containerRef.current.clientHeight || 500,
       lowGraphics: isLow
     }).then(() => {
       engine.onFeatureClick = onSelectProvince;
@@ -50,22 +52,32 @@ export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selec
     };
   }, []); // Run once on mount
 
+  // 2. Fetch GeoJSON features once
   useEffect(() => {
-    if (!engineReady || !engineRef.current) return;
+    if (!engineReady || !engineRef.current || geoJsonFeatures) return;
     
-    // Fetch geojson and render map polygons
     fetch('/assets/maps/countries-50m.json')
       .then(res => res.json())
       .then(data => {
-        if (data && data.features && engineRef.current) {
-          engineRef.current.renderMapPolygons(data.features);
+        if (data && data.features) {
+          setGeoJsonFeatures(data.features);
+          if (engineRef.current) {
+            engineRef.current.renderMapPolygons(data.features, territories, selectedProvinceId, selectedMatchId);
+          }
         }
       })
       .catch(err => console.error("Could not load map json:", err));
       
   }, [engineReady]);
 
-  // Update units state
+  // 3. Update political colors dynamically on database updates (Zero Fetch!)
+  useEffect(() => {
+    if (!engineReady || !engineRef.current || !geoJsonFeatures) return;
+    
+    engineRef.current.drawMap(territories, selectedProvinceId, selectedMatchId);
+  }, [territories, selectedProvinceId, selectedMatchId, geoJsonFeatures, engineReady]);
+
+  // 4. Update units state
   useEffect(() => {
      if (!engineReady || !engineRef.current || !selectedMatchId) return;
      

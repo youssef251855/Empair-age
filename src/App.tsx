@@ -56,9 +56,19 @@ function GameLayout() {
   // Active tab controllers: 'map' | 'dashboard' | 'alliances' | 'espionage' | 'chat' | 'leaderboards' | 'admin'
   const [activeTab, setActiveTab] = useState<string>('map');
 
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    // Let layout and PIXI canvas adapt to new sizes instantly on tab changes
+    setTimeout(() => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('resize'));
+      }
+    }, 50);
+  };
+
   // Request notifications permission on load
   React.useEffect(() => {
-    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
       Notification.requestPermission();
     }
   }, []);
@@ -67,13 +77,38 @@ function GameLayout() {
   const prevMessagesLength = React.useRef(messages?.length || 0);
 
   React.useEffect(() => {
-    if (messages && messages.length > prevMessagesLength.current) {
-      const latestMessage = messages[0]; // Assuming reversed array where latest is 0
-      if (latestMessage && 'Notification' in window && Notification.permission === 'granted' && latestMessage.senderId !== currentUser?.uid) {
-        new Notification(latestMessage.senderCountryName || 'بث عاجل', {
-          body: latestMessage.text,
+    const showLocalNotification = async (title: string, bodyText: string) => {
+      if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'granted') return;
+      
+      try {
+        if ('serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          if (registration && 'showNotification' in registration) {
+            registration.showNotification(title, {
+              body: bodyText,
+              icon: '/icons/logo.png',
+            });
+            return;
+          }
+        }
+      } catch (swErr) {
+        console.warn("Could not show notification via ServiceWorker:", swErr);
+      }
+
+      try {
+        new Notification(title, {
+          body: bodyText,
           icon: '/icons/logo.png',
         });
+      } catch (constructErr) {
+        console.warn("Failed to construct Notification object directly:", constructErr);
+      }
+    };
+
+    if (messages && messages.length > prevMessagesLength.current) {
+      const latestMessage = messages[0]; // Assuming reversed array where latest is 0
+      if (latestMessage && latestMessage.senderId !== currentUser?.uid) {
+        showLocalNotification(latestMessage.senderCountryName || 'بث عاجل', latestMessage.text);
       }
     }
     prevMessagesLength.current = messages?.length || 0;
@@ -362,7 +397,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('map')}
+            onClick={() => handleTabChange('map')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'map' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Compass className="w-4 h-4" />
@@ -370,7 +405,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('dashboard')}
+            onClick={() => handleTabChange('dashboard')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Building2 className="w-4 h-4" />
@@ -378,7 +413,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('alliances')}
+            onClick={() => handleTabChange('alliances')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'alliances' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Users className="w-4 h-4" />
@@ -386,7 +421,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('espionage')}
+            onClick={() => handleTabChange('espionage')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'espionage' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Eye className="w-4 h-4" />
@@ -394,7 +429,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('market')}
+            onClick={() => handleTabChange('market')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'market' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <ShoppingCart className="w-4 h-4" />
@@ -402,7 +437,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('news')}
+            onClick={() => handleTabChange('news')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'news' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Newspaper className="w-4 h-4" />
@@ -410,7 +445,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('chat')}
+            onClick={() => handleTabChange('chat')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'chat' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <MessageSquare className="w-4 h-4" />
@@ -418,7 +453,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('leaderboards')}
+            onClick={() => handleTabChange('leaderboards')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'leaderboards' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Award className="w-4 h-4" />
@@ -426,7 +461,7 @@ function GameLayout() {
           </button>
 
           <button
-            onClick={() => setActiveTab('settings')}
+            onClick={() => handleTabChange('settings')}
             className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'settings' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
           >
             <Settings className="w-4 h-4" />
@@ -436,7 +471,7 @@ function GameLayout() {
           {/* Optional Admin terminal panel */}
           {isAdmin && (
             <button
-              onClick={() => setActiveTab('admin')}
+              onClick={() => handleTabChange('admin')}
               className={`flex items-center gap-1.5 text-xs font-black px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer md:ml-auto border shrink-0 whitespace-nowrap ${activeTab === 'admin' ? 'bg-red-650 text-slate-100 border-red-500 shadow-md animate-pulse font-extrabold' : 'border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-slate-900/50'}`}
             >
               <Terminal className="w-4 h-4" />
@@ -449,16 +484,38 @@ function GameLayout() {
         {/* Dynamic Inner Tab routing render */}
         <div className="flex-1">
           <Suspense fallback={<div className="flex items-center justify-center p-12 text-amber-500 font-bold animate-pulse text-lg">🚀 تحميل البيانات التكتيكية والعسكرية...</div>}>
-            {activeTab === 'map' && <MapTab />}
-            {activeTab === 'dashboard' && <DashboardTab />}
-            {activeTab === 'alliances' && <AllianceTab />}
-            {activeTab === 'espionage' && <EspionageTab />}
-            {activeTab === 'market' && <MarketTab />}
-            {activeTab === 'news' && <NewsTab />}
-            {activeTab === 'chat' && <ChatComponent />}
-            {activeTab === 'leaderboards' && <LeaderboardTab />}
-            {activeTab === 'settings' && <SettingsTab />}
-            {activeTab === 'admin' && isAdmin && <AdminConsole />}
+            <div className={activeTab === 'map' ? 'block' : 'hidden'}>
+              <MapTab />
+            </div>
+            <div className={activeTab === 'dashboard' ? 'block' : 'hidden'}>
+              <DashboardTab />
+            </div>
+            <div className={activeTab === 'alliances' ? 'block' : 'hidden'}>
+              <AllianceTab />
+            </div>
+            <div className={activeTab === 'espionage' ? 'block' : 'hidden'}>
+              <EspionageTab />
+            </div>
+            <div className={activeTab === 'market' ? 'block' : 'hidden'}>
+              <MarketTab />
+            </div>
+            <div className={activeTab === 'news' ? 'block' : 'hidden'}>
+              <NewsTab />
+            </div>
+            <div className={activeTab === 'chat' ? 'block' : 'hidden'}>
+              <ChatComponent />
+            </div>
+            <div className={activeTab === 'leaderboards' ? 'block' : 'hidden'}>
+              <LeaderboardTab />
+            </div>
+            <div className={activeTab === 'settings' ? 'block' : 'hidden'}>
+              <SettingsTab />
+            </div>
+            {isAdmin && (
+              <div className={activeTab === 'admin' ? 'block' : 'hidden'}>
+                <AdminConsole />
+              </div>
+            )}
           </Suspense>
         </div>
 

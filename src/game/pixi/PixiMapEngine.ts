@@ -20,8 +20,9 @@ export class PixiMapEngine {
   private unitPool: PIXI.Sprite[] = [];
   private activeUnits: Map<string, PIXI.Sprite> = new Map();
 
-  // Basic graphic references to prevent recreating
-  private mapGraphics: PIXI.Graphics;
+  // Map features cached for redrawing
+  private mapFeatures: any[] = [];
+  private lastSelectedMatchId: string | null = null;
 
   constructor() {
     this.app = new PIXI.Application();
@@ -32,20 +33,34 @@ export class PixiMapEngine {
     this.unitsContainer = new PIXI.Container();
     this.fxContainer = new PIXI.Container();
     this.fogContainer = new PIXI.Container();
-    
-    this.mapGraphics = new PIXI.Graphics();
-    this.mapContainer.addChild(this.mapGraphics);
   }
 
   public async init(options: PixiEngineOptions) {
+    // Determine resolution depending on graphics settings
+    const savedQuality = localStorage.getItem('graphicsQuality') || 'high';
+    let resolution = 1;
+    let antialias = false;
+
+    if (savedQuality === 'high') {
+      resolution = Math.min(window.devicePixelRatio || 1, 1.5);
+      antialias = true;
+    } else if (savedQuality === 'medium') {
+      resolution = Math.min(window.devicePixelRatio || 1, 1.25);
+      antialias = false;
+    } else {
+      resolution = 1; // low quality
+      antialias = false;
+    }
+
     await this.app.init({
-      width: options.width,
-      height: options.height,
+      width: options.width || 800,
+      height: options.height || 500,
       backgroundColor: 0x0f172a, // match slate-900
-      resolution: window.devicePixelRatio || 1,
+      resolution: resolution,
       autoDensity: true,
-      antialias: !options.lowGraphics,
-      preference: 'webgl' // Force WebGL
+      antialias: antialias,
+      preference: 'webgl', // Force WebGL for extreme speed
+      hello: false
     });
 
     const canvas = this.app.canvas as HTMLCanvasElement;
@@ -57,10 +72,10 @@ export class PixiMapEngine {
 
     // Setup Viewport for panning and zooming
     this.viewport = new Viewport({
-      screenWidth: options.width,
-      screenHeight: options.height,
-      worldWidth: 2000,
-      worldHeight: 1100,
+      screenWidth: options.width || 800,
+      screenHeight: options.height || 500,
+      worldWidth: 1000, // Matched with our projection coordinates
+      worldHeight: 550,  // Matched with our projection coordinates
       events: this.app.renderer.events
     });
 
@@ -78,27 +93,44 @@ export class PixiMapEngine {
     this.viewport.addChild(this.unitsContainer);
     this.viewport.addChild(this.fxContainer);
 
-    console.log("[PixiMapEngine] Initialized with WebGL WebRender. Anti-alias:", !options.lowGraphics);
+    console.log("[PixiMapEngine] Initialized. Resolution:", resolution, "Antialias:", antialias);
   }
 
   public destroy() {
-    this.app.destroy({ removeView: true });
+    // Destroy all children to prevent WebGL memory leaks
+    if (this.app) {
+      this.app.destroy({ removeView: true, children: true });
+    }
   }
 
   public resize(width: number, height: number) {
-    this.app.renderer.resize(width, height);
-    this.viewport.resize(width, height, 2000, 1100);
+    if (this.app && this.app.renderer && this.viewport) {
+      this.app.renderer.resize(width, height);
+      this.viewport.resize(width, height, 1000, 550);
+    }
   }
 
   // Map interaction events
   public onFeatureClick: ((id: string) => void) | null = null;
 
   // Draw political borders and filled shapes using Pixi Graphics
-  public renderMapPolygons(features: any[]) {
-    // Clear previous
-    this.mapContainer.removeChildren();
+  public renderMapPolygons(features: any[], territories: any[] = [], selectedProvinceId: string | null = null, selectedMatchId: string | null = null) {
+    this.mapFeatures = features;
+    this.drawMap(territories, selectedProvinceId, selectedMatchId);
+  }
+
+  // Draw or Redraw the map without re-fetching GeoJSON
+  public drawMap(territories: any[] = [], selectedProvinceId: string | null = null, selectedMatchId: string | null = null) {
+    this.lastSelectedMatchId = selectedMatchId;
+
+    // To prevent WebGL memory leaks, destroy all child graphics objects before removing them
+    while (this.mapContainer.children.length > 0) {
+      const child = this.mapContainer.getChildAt(0) as PIXI.Graphics;
+      this.mapContainer.removeChildAt(0);
+      child.destroy({ children: true, texture: true, geometry: true });
+    }
     
-    // Virtual Dimensions mapping
+    // Virtual Dimensions mapping matching the worldWidth/worldHeight
     const virtualWidth = 1000;
     const virtualHeight = 550;
 
@@ -111,11 +143,39 @@ export class PixiMapEngine {
       };
     };
 
-    features.forEach(feat => {
+    this.mapFeatures.forEach(feat => {
       const geo = feat.geometry;
       if (!geo) return;
 
       const featureId = feat.properties?.id;
+      const expectedDbId = selectedMatchId ? `${selectedMatchId}_${featureId}` : featureId;
+      
+      // Look up target territory state to resolve tactical colors
+      const territory = territories?.find(t => t.id === expectedDbId || t.id === featureId);
+
+      // Determine colors
+      let fillColor = 0x1e293b; // Default independent/neutral color (Slate-800)
+      let fillAlpha = 0.5;
+      let strokeColor = 0x334155; // Default Slate-700 border
+      let strokeWidth = 1;
+
+      if (territory) {
+        if (territory.color) {
+          fillColor = parseInt(territory.color.replace('#', '0x'), 16);
+          fillAlpha = 0.75;
+        } else {
+          fillColor = 0x334155; // Uncolored owned territory
+          fillAlpha = 0.6;
+        }
+
+        // Highlight selected province with an Amber Gold halo
+        if (territory.id === selectedProvinceId || featureId === selectedProvinceId) {
+          strokeColor = 0xf59e0b;
+          strokeWidth = 2.5;
+          fillAlpha = Math.min(fillAlpha + 0.15, 1.0);
+        }
+      }
+
       const featureGraphics = new PIXI.Graphics();
       featureGraphics.eventMode = 'static';
       featureGraphics.cursor = 'pointer';
@@ -142,7 +202,7 @@ export class PixiMapEngine {
            points.push(pt.x, pt.y);
          }
          
-         featureGraphics.poly(points).fill({ color: 0x0f172a }).stroke({ width: 1, color: 0x1e293b });
+         featureGraphics.poly(points).fill({ color: fillColor, alpha: fillAlpha }).stroke({ width: strokeWidth, color: strokeColor });
       };
 
       if (geo.type === 'Polygon') {
@@ -180,7 +240,9 @@ export class PixiMapEngine {
   private activeUnitSprites: Map<string, PIXI.Sprite> = new Map();
 
   public updateUnits(units: any[]) {
-    // 1. Cull out bounds
+    if (!this.viewport) return;
+
+    // Cull out bounds for high performance
     const bounds = this.viewport.getVisibleBounds();
 
     const currentIds = new Set(units.map(u => u.id));
@@ -196,11 +258,11 @@ export class PixiMapEngine {
 
     // Update or spawn
     units.forEach(unit => {
-      // Very basic projection equivalent to projectCoords
+      // Align coordinates EXACTLY with map projection
       const xPercent = (unit.lng + 180) / 360;
-      const yPercent = (90 - unit.lat) / 180;
-      const x = xPercent * 2000;
-      const y = yPercent * 1100;
+      const yPercent = (85 - unit.lat) / 170;
+      const x = xPercent * 1000;
+      const y = yPercent * 550;
 
       // Viewport Culling logic
       const isVisible = (x >= bounds.x && x <= bounds.x + bounds.width && y >= bounds.y && y <= bounds.y + bounds.height);
