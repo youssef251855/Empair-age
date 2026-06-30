@@ -140,6 +140,8 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
       await queueWrite(countryRef, botCountry);
     }
 
+    const countryCapitalsSet = new Set<string>();
+
     // 2. Seed Provinces under their respective Country owner
     for (const prov of allProvinces) {
       const p = prov.properties;
@@ -155,6 +157,11 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
       };
 
       const countryDocId = `country_${iso}_${matchId}`;
+
+      const isCapital = !countryCapitalsSet.has(countryDocId);
+      if (isCapital) {
+        countryCapitalsSet.add(countryDocId);
+      }
 
       // Assign resources
       const rIdx = Math.floor(Math.random() * resourceTypes.length);
@@ -181,6 +188,7 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
         type: tType,
         resourceSpecialty: resSpecialty,
         resourceMultiplier: parseFloat((1.0 + Math.random() * 1.0).toFixed(1)),
+        isCapital: isCapital,
         garrison: {
           infantry: Math.floor(25 + Math.random() * 25),
           specialForces: Math.floor(1 + Math.random() * 5),

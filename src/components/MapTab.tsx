@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { Territory, Army, Garrison, MapUnit } from '../types';
 import { UNIT_DEFS } from '../lib/gameData';
-import { Map } from './Map';
+import { PixiMapWrapper } from './game/PixiMapWrapper';
 import { ProvinceState } from '../services/provinceService';
 import { spawnUnit } from '../services/unitService';
 import { useBotEngine } from '../hooks/useBotEngine';
@@ -39,7 +39,8 @@ export const MapTab: React.FC = () => {
     executeEspionage,
     sendChatMessage,
     addBotCountry,
-    spies
+    spies,
+    selectedMatchId
   } = useGame();
 
   useBotEngine();
@@ -166,7 +167,7 @@ export const MapTab: React.FC = () => {
   }, [defaultOwnedTerritory, selectedTerritory]);
   
   // Tactical action drawer state
-  const [tacticalAction, setTacticalAction] = useState<'info' | 'deploy' | 'invade' | 'espionage' | 'diplomacy' | 'negotiate' | 'spawn'>('info');
+  const [tacticalAction, setTacticalAction] = useState<'info' | 'deploy' | 'invade' | 'espionage' | 'diplomacy' | 'negotiate' | 'spawn' | 'airstrike'>('info');
 
   // Input states for forces relocation or attacks
   const [infantryInput, setInfantryInput] = useState<number>(0);
@@ -281,7 +282,7 @@ export const MapTab: React.FC = () => {
 
     const unit: MapUnit = {
       id: `unit_${Date.now()}`,
-      matchId: currentCountry.matchId || '',
+      matchId: selectedMatchId || '',
       ownerCountryId: currentCountry.id,
       ownerCountryName: currentCountry.name,
       color: currentCountry.color || '#f59e0b',
@@ -425,7 +426,7 @@ export const MapTab: React.FC = () => {
         allianceId: null,
         recipientId: selectedTerritory.ownerCountryId,
         recipientCountryName: selectedTerritory.ownerCountryName,
-        matchId: currentCountry.matchId || ''
+        matchId: selectedMatchId || ''
       });
       
       alert('تم إرسال رسالة التفاوض إلى حاكم الدولة بنجاح!');
@@ -468,7 +469,7 @@ export const MapTab: React.FC = () => {
             allianceId: null,
             recipientId: currentCountry.id,
             recipientCountryName: currentCountry.name,
-            matchId: currentCountry.matchId || ''
+            matchId: selectedMatchId || ''
           });
         }
       }
@@ -554,7 +555,13 @@ export const MapTab: React.FC = () => {
         </div>
 
         {/* Real Globe Mapping */}
-        <Map onSelectProvince={handleSelectSearchResult} selectedProvinceId={selectedTerritory?.id || null} />
+        <PixiMapWrapper 
+          onSelectProvince={(id) => {
+            const terr = territories.find(t => t.id === id);
+            if (terr) handleSelectSearchResult(terr);
+          }} 
+          selectedProvinceId={selectedTerritory?.id || null} 
+        />
 
         <div className="bg-slate-900/50 p-2 text-center text-[11px] text-slate-400 rounded-lg mt-3 border border-slate-800/60">
           💡 حرك خريطة العالم بأريحية واستخدم زري التكبير/التصغير لرؤية تفاصيل المقاطعة. اضغط على أي مقاطعة لتنشيط تحركاتها العسكرية بالجانب الأيسر.

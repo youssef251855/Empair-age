@@ -3,20 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import { ResourceHeader } from './components/ResourceHeader';
-import { MapTab } from './components/MapTab';
-import { DashboardTab } from './components/DashboardTab';
-import { AllianceTab } from './components/AllianceTab';
-import { EspionageTab } from './components/EspionageTab';
-import { ChatComponent } from './components/ChatComponent';
-import { LeaderboardTab } from './components/LeaderboardTab';
-import { AdminConsole } from './components/AdminConsole';
-import { RegistrationForm } from './components/RegistrationForm';
-import { MatchSelection } from './components/MatchSelection';
-import { MarketTab } from './components/MarketTab';
-import { NewsTab } from './components/NewsTab';
+
+// Heavy components lazily loaded for higher performance / faster bundle
+const MapTab = lazy(() => import('./components/MapTab').then(m => ({ default: m.MapTab })));
+const DashboardTab = lazy(() => import('./components/DashboardTab').then(m => ({ default: m.DashboardTab })));
+const AllianceTab = lazy(() => import('./components/AllianceTab').then(m => ({ default: m.AllianceTab })));
+const EspionageTab = lazy(() => import('./components/EspionageTab').then(m => ({ default: m.EspionageTab })));
+const ChatComponent = lazy(() => import('./components/ChatComponent').then(m => ({ default: m.ChatComponent })));
+const LeaderboardTab = lazy(() => import('./components/LeaderboardTab').then(m => ({ default: m.LeaderboardTab })));
+const AdminConsole = lazy(() => import('./components/AdminConsole').then(m => ({ default: m.AdminConsole })));
+const RegistrationForm = lazy(() => import('./components/RegistrationForm').then(m => ({ default: m.RegistrationForm })));
+const MatchSelection = lazy(() => import('./components/MatchSelection').then(m => ({ default: m.MatchSelection })));
+const MarketTab = lazy(() => import('./components/MarketTab').then(m => ({ default: m.MarketTab })));
+const NewsTab = lazy(() => import('./components/NewsTab').then(m => ({ default: m.NewsTab })));
+const SettingsTab = lazy(() => import('./components/SettingsTab').then(m => ({ default: m.SettingsTab })));
 import { 
   Shield, 
   Sword, 
@@ -31,7 +34,8 @@ import {
   Eye,
   Activity,
   ShoppingCart,
-  Newspaper
+  Newspaper,
+  Settings
 } from 'lucide-react';
 
 function GameLayout() {
@@ -420,6 +424,14 @@ function GameLayout() {
             <span>لوحات الشرف والتصنيف الدولي</span>
           </button>
 
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 md:px-4 md:py-2.5 rounded-lg transition-all cursor-pointer shrink-0 whitespace-nowrap ${activeTab === 'settings' ? 'bg-amber-500 text-slate-950 font-black shadow-md' : 'text-slate-400 hover:text-amber-400 hover:bg-slate-900/50'}`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>الإعدادات</span>
+          </button>
+
           {/* Optional Admin terminal panel */}
           {isAdmin && (
             <button
@@ -435,15 +447,18 @@ function GameLayout() {
 
         {/* Dynamic Inner Tab routing render */}
         <div className="flex-1">
-          {activeTab === 'map' && <MapTab />}
-          {activeTab === 'dashboard' && <DashboardTab />}
-          {activeTab === 'alliances' && <AllianceTab />}
-          {activeTab === 'espionage' && <EspionageTab />}
-          {activeTab === 'market' && <MarketTab />}
-          {activeTab === 'news' && <NewsTab />}
-          {activeTab === 'chat' && <ChatComponent />}
-          {activeTab === 'leaderboards' && <LeaderboardTab />}
-          {activeTab === 'admin' && isAdmin && <AdminConsole />}
+          <Suspense fallback={<div className="flex items-center justify-center p-12 text-amber-500 font-bold animate-pulse text-lg">🚀 تحميل البيانات التكتيكية والعسكرية...</div>}>
+            {activeTab === 'map' && <MapTab />}
+            {activeTab === 'dashboard' && <DashboardTab />}
+            {activeTab === 'alliances' && <AllianceTab />}
+            {activeTab === 'espionage' && <EspionageTab />}
+            {activeTab === 'market' && <MarketTab />}
+            {activeTab === 'news' && <NewsTab />}
+            {activeTab === 'chat' && <ChatComponent />}
+            {activeTab === 'leaderboards' && <LeaderboardTab />}
+            {activeTab === 'settings' && <SettingsTab />}
+            {activeTab === 'admin' && isAdmin && <AdminConsole />}
+          </Suspense>
         </div>
 
       </main>

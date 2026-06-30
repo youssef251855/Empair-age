@@ -69,12 +69,12 @@ export const UnitLayer: React.FC<UnitLayerProps> = ({
       let existingMarker = markersRef.current[unit.id];
 
       // Format custom HTML Icon
-      let iconImg = soldierImg;
-      if (unit.type === 'tank') iconImg = tankImg;
-      if (unit.type === 'jet') iconImg = jetImg;
+      let iconImg = (soldierImg as any)?.src || soldierImg;
+      if (unit.type === 'tank') iconImg = (tankImg as any)?.src || tankImg;
+      if (unit.type === 'jet') iconImg = (jetImg as any)?.src || jetImg;
 
       let statusBadge = '✅ جاهز';
-      if (unit.status === 'moved') statusBadge = '🚀 يتحرك';
+      if (unit.status === 'moving') statusBadge = '🚀 يتحرك';
       if (unit.status === 'training' as any) statusBadge = '⚙️ قيد التدريب';
 
       const html = `
@@ -105,7 +105,7 @@ export const UnitLayer: React.FC<UnitLayerProps> = ({
       let currentLat = unit.lat;
       let currentLng = unit.lng;
 
-      if (unit.status === 'moved' && unit.targetLat !== null && unit.targetLng !== null) {
+      if (unit.status === 'moving' && unit.targetLat !== null && unit.targetLng !== null) {
         // speed is let's say "degrees per second".
         const elapsedSec = (now - unit.lastUpdatedAt) / 1000;
         
@@ -155,7 +155,7 @@ export const UnitLayer: React.FC<UnitLayerProps> = ({
       
       const visibleLoopUnits = units.filter(u => u.ownerCountryId === currentCountryId);
       visibleLoopUnits.forEach(unit => {
-        if (unit.status === 'moved' && unit.targetLat !== null && unit.targetLng !== null) {
+        if (unit.status === 'moving' && unit.targetLat !== null && unit.targetLng !== null) {
           const elapsedSec = (now - unit.lastUpdatedAt) / 1000;
           const velocity = unit.speed * 0.1;
           

@@ -25,14 +25,35 @@ function isPointInPolygon(point: { x: number; y: number }, vs: [number, number][
 }
 
 export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }) => {
-  const { currentCountry, selectedMatchId, countries, spies } = useGame();
+  const { currentCountry, selectedMatchId, countries, spies, territories } = useGame();
 
-  const [provinces, setProvinces] = useState<ProvinceState[]>([]);
   const [units, setUnits] = useState<MapUnit[]>([]);
   const [geojsonData, setGeojsonData] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<'political' | 'alliances' | 'war' | 'resources'>('political');
+
+  // Adaptive Performance Diagnostics
+  const performanceMode = useRef<'low' | 'high'>('high');
+  useEffect(() => {
+    // Check for explicit user setting first
+    const explicitSetting = localStorage.getItem('graphicsQuality');
+    if (explicitSetting) {
+      performanceMode.current = explicitSetting === 'high' ? 'high' : 'low';
+      console.log(`Graphics mode forced by user setting to: ${explicitSetting}`);
+      return;
+    }
+
+    // Auto-detect weak devices based on cores or memory
+    const hardwareCores = navigator.hardwareConcurrency || 4;
+    // @ts-ignore
+    const deviceMemory = navigator.deviceMemory || 4;
+    
+    if (hardwareCores <= 4 || deviceMemory <= 4) {
+      performanceMode.current = 'low';
+      console.log('Low graphics mode auto-enabled to save resources.');
+    }
+  }, []);
 
   const lastHoverCheckRef = useRef<number>(0);
 
@@ -44,9 +65,9 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
   const virtualWidth = 1000;
   const virtualHeight = 550;
 
-  const [zoom, setZoom] = useState<number>(1.2);
-  const [panX, setPanX] = useState<number>(100);
-  const [panY, setPanY] = useState<number>(50);
+  const zoomRef = useRef<number>(1.2);
+  const panXRef = useRef<number>(100);
+  const panYRef = useRef<number>(50);
 
   const [hoveredPos, setHoveredPos] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<any | null>(null);
@@ -65,15 +86,20 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
   // Combat spark particles for Layer 3 FX
   const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; life: number; color: string }>>([]);
 
+  const pathsRef = useRef<Map<string, Path2D[]>>(new globalThis.Map());
+  const bboxesRef = useRef<Map<string, [number, number, number, number]>>(new globalThis.Map());
+
   // Dynamic references kept fresh for the high-frequency animation loop
-  const provincesRef = useRef<ProvinceState[]>([]);
+  const provincesRef = useRef<Map<string, ProvinceState>>(new globalThis.Map());
   const unitsRef = useRef<MapUnit[]>([]);
   const selectedUnitIdRef = useRef<string | null>(null);
   const hoveredProvinceIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    provincesRef.current = provinces;
-  }, [provinces]);
+    const lookup = new globalThis.Map<string, ProvinceState>();
+    territories.forEach(t => lookup.set(t.id, t as ProvinceState));
+    provincesRef.current = lookup;
+  }, [territories]);
 
   useEffect(() => {
     unitsRef.current = units;
@@ -104,8 +130,8 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
   // Convert flat screen pixels back into Spherical Coordinates
   const unprojectPixels = (canvasX: number, canvasY: number) => {
-    const virtualX = (canvasX - panX) / zoom;
-    const virtualY = (canvasY - panY) / zoom;
+    const virtualX = (canvasX - panXRef.current) / zoomRef.current;
+    const virtualY = (canvasY - panYRef.current) / zoomRef.current;
     const xPercent = virtualX / virtualWidth;
     const yPercent = virtualY / virtualHeight;
     const lng = xPercent * 360 - 180;
@@ -234,11 +260,6 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
     loadAssetsAndSeeding();
 
-    // Subscribe to live province states
-    const unsubscribeProvs = listenToProvinces(selectedMatchId, (liveProvs) => {
-      if (isMounted) setProvinces(liveProvs);
-    });
-
     // Subscribe to live battle unit markers
     const unsubscribeUnits = listenToUnits(selectedMatchId, (liveUnits) => {
       if (isMounted) setUnits(liveUnits);
@@ -246,7 +267,6 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
     return () => {
       isMounted = false;
-      unsubscribeProvs();
       unsubscribeUnits();
     };
   }, [selectedMatchId]);
@@ -257,11 +277,74 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       const rect = containerRef.current.getBoundingClientRect();
       const pt = projectCoords(24.0, 45.0); // Middle East coords
       const startZoom = 1.6;
-      setZoom(startZoom);
-      setPanX(rect.width / 2 - pt.x * startZoom);
-      setPanY(rect.height / 2 - pt.y * startZoom);
+      zoomRef.current = startZoom;
+      panXRef.current = rect.width / 2 - pt.x * startZoom;
+      panYRef.current = rect.height / 2 - pt.y * startZoom;
     }
   }, [loading]);
+
+  useEffect(() => {
+    if (!geojsonData || !geojsonData.features) return;
+    if (pathsRef.current.size > 0) return; // Only process once per session
+
+    // Read graphics quality setting to determine geometry simplification density
+    const quality = localStorage.getItem('graphicsQuality') || 'high';
+    // skip factor: low = 4 (draw every 4th vertex), medium = 2, high = 1 (all vertices)
+    const step = quality === 'low' ? 4 : quality === 'medium' ? 2 : 1;
+
+    geojsonData.features.forEach((feat: any) => {
+      const geoJsonId = feat.properties.id;
+      const geo = feat.geometry;
+      if (!geo || !geoJsonId) return;
+
+      const featurePaths: Path2D[] = [];
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
+      const addToPath = (ring: [number, number][]) => {
+        if (ring.length === 0) return;
+        const path = new Path2D();
+        
+        // Always include the first and last points to close the polygon
+        const p0 = projectCoords(ring[0][1], ring[0][0]);
+        if (p0.x < minX) minX = p0.x;
+        if (p0.x > maxX) maxX = p0.x;
+        if (p0.y < minY) minY = p0.y;
+        if (p0.y > maxY) maxY = p0.y;
+        path.moveTo(p0.x, p0.y);
+        
+        for (let i = 1; i < ring.length - 1; i += step) {
+          const pt = projectCoords(ring[i][1], ring[i][0]);
+          if (pt.x < minX) minX = pt.x;
+          if (pt.x > maxX) maxX = pt.x;
+          if (pt.y < minY) minY = pt.y;
+          if (pt.y > maxY) maxY = pt.y;
+          path.lineTo(pt.x, pt.y);
+        }
+        
+        const plast = projectCoords(ring[ring.length - 1][1], ring[ring.length - 1][0]);
+        if (plast.x < minX) minX = plast.x;
+        if (plast.x > maxX) maxX = plast.x;
+        if (plast.y < minY) minY = plast.y;
+        if (plast.y > maxY) maxY = plast.y;
+        path.lineTo(plast.x, plast.y);
+        path.closePath();
+        
+        featurePaths.push(path);
+      };
+
+      if (geo.type === 'Polygon') {
+        geo.coordinates.forEach((ring: any) => addToPath(ring));
+      } else if (geo.type === 'MultiPolygon') {
+        geo.coordinates.forEach((poly: any) => {
+          poly.forEach((ring: any) => addToPath(ring));
+        });
+      }
+
+      pathsRef.current.set(geoJsonId, featurePaths);
+      bboxesRef.current.set(geoJsonId, [minX, minY, maxX, maxY]);
+    });
+    console.log("Vector Path2D generation completed for Tactical Map");
+  }, [geojsonData]);
 
   // Find geographical sector hit under coordinates
   const findProvinceAtCoords = (lat: number, lng: number) => {
@@ -321,7 +404,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
       if (isInsideFeature()) {
         const expectedDbId = `${selectedMatchId}_${geoJsonId}`;
-        const firestate = provincesRef.current.find((p) => p.id === expectedDbId);
+        const firestate = provincesRef.current.get(expectedDbId);
         return { feat, firestate, expectedDbId };
       }
     }
@@ -353,8 +436,22 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
           const geo = feat.geometry;
           if (!geo || !geoJsonId) return;
 
+          // VIEWPORT CULLING (Skip drawing off-screen polygons!)
+          const bbox = bboxesRef.current.get(geoJsonId);
+          if (bbox) {
+            const [minX, minY, maxX, maxY] = bbox;
+            // Apply scale and pan directly to bounds checking bounds vs screen
+            const screenMinX = minX * zoomRef.current + panXRef.current;
+            const screenMaxX = maxX * zoomRef.current + panXRef.current;
+            const screenMinY = minY * zoomRef.current + panYRef.current;
+            const screenMaxY = maxY * zoomRef.current + panYRef.current;
+            if (screenMaxX < -50 || screenMinX > width + 50 || screenMaxY < -50 || screenMinY > height + 50) {
+              return; // Polygon is outside the screen viewport completely!
+            }
+          }
+
           const expectedDbId = `${selectedMatchId}_${geoJsonId}`;
-          const dbProv = provincesRef.current.find(p => p.id === expectedDbId);
+          const dbProv = provincesRef.current.get(expectedDbId);
 
           const isSelected = selectedProvinceId === expectedDbId;
           const isHovered = hoveredProvinceIdRef.current === expectedDbId;
@@ -380,48 +477,36 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
             strokeWidth = 1.2;
           }
 
-          const drawRing = (ring: [number, number][]) => {
-            if (ring.length === 0) return;
-            ctx.beginPath();
-            for (let i = 0; i < ring.length; i++) {
-              const pt = projectCoords(ring[i][1], ring[i][0]);
-              const sx = pt.x * zoom + panX;
-              const sy = pt.y * zoom + panY;
-              if (i === 0) ctx.moveTo(sx, sy);
-              else ctx.lineTo(sx, sy);
-            }
-            ctx.closePath();
+          const p2dArray = pathsRef.current.get(geoJsonId);
+          if (p2dArray) {
+            ctx.save();
+            ctx.translate(panXRef.current, panYRef.current);
+            ctx.scale(zoomRef.current, zoomRef.current);
+            
+            p2dArray.forEach((path) => {
+              ctx.fillStyle = fillColor;
+              ctx.fill(path);
+              
+              if (isHovered) {
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.06)';
+                ctx.fill(path);
+              }
 
-            ctx.fillStyle = fillColor;
-            ctx.fill();
-
-            // Hover light overlay
-            if (isHovered) {
-              ctx.fillStyle = 'rgba(56, 189, 248, 0.06)';
-              ctx.fill();
-            }
-
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = strokeWidth;
-            ctx.stroke();
-          };
-
-          if (geo.type === 'Polygon') {
-            geo.coordinates.forEach((ring: any) => drawRing(ring));
-          } else if (geo.type === 'MultiPolygon') {
-            geo.coordinates.forEach((poly: any) => {
-              poly.forEach((ring: any) => drawRing(ring));
+              ctx.strokeStyle = strokeColor;
+              ctx.lineWidth = strokeWidth / zoomRef.current;
+              ctx.stroke(path);
             });
+            ctx.restore();
           }
 
           // Render Province Labels if zoom scale is wide enough or if there is an active battle clash
-          if (dbProv && (zoom > 1.1 || dbProv.battleStatus === 'clashing')) {
+          if (dbProv && (zoomRef.current > 1.1 || dbProv.battleStatus === 'clashing')) {
             const labelLat = feat.properties.centerLat !== undefined ? feat.properties.centerLat : (90 - (dbProv.posY / 100) * 180);
             const labelLng = feat.properties.centerLng !== undefined ? feat.properties.centerLng : ((dbProv.posX / 100) * 360 - 180);
             if (labelLat !== undefined && labelLng !== undefined) {
               const pt = projectCoords(labelLat, labelLng);
-              const sx = pt.x * zoom + panX;
-              const sy = pt.y * zoom + panY;
+              const sx = pt.x * zoomRef.current + panXRef.current;
+              const sy = pt.y * zoomRef.current + panYRef.current;
 
               if (dbProv.battleStatus === 'clashing') {
                 // Draw flashing engagement aura rings
@@ -433,7 +518,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
                 ctx.stroke();
 
                 // Draw central explosion fire spark particles over time
-                if (Math.random() < 0.20 && particlesRef.current.length < 300) {
+                if (performanceMode.current === 'high' && Math.random() < 0.20 && particlesRef.current.length < 300) {
                   particlesRef.current.push({
                     x: sx + (Math.random() - 0.5) * 16,
                     y: sy + (Math.random() - 0.5) * 16,
@@ -463,7 +548,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
               const flag = dbProv.flagEmoji || '🏳️';
               const totalTroops = dbProv.garrison ? (dbProv.garrison.infantry + dbProv.garrison.tanks + dbProv.garrison.specialForces + dbProv.garrison.artillery + dbProv.garrison.jets) : 0;
               
-              const displayText = zoom > 3.0 ? `${flag} ${cleanName} [${totalTroops}]` : `${flag} [${totalTroops}]`;
+              const displayText = zoomRef.current > 3.0 ? `${flag} ${cleanName} [${totalTroops}]` : `${flag} [${totalTroops}]`;
 
               // Draw soft text background box
               ctx.font = 'bold 8px Cairo, sans-serif';
@@ -485,24 +570,26 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       }
 
       // --- COORDINATES TACTICAL GRID (Layer 1 Overlay) ---
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.03)';
-      ctx.lineWidth = 1.0;
-      // Draw grid lines mapping 10-degree increments
-      for (let lg = -180; lg <= 180; lg += 15) {
-        ctx.beginPath();
-        const pt1 = projectCoords(-85, lg);
-        const pt2 = projectCoords(85, lg);
-        ctx.moveTo(pt1.x * zoom + panX, pt1.y * zoom + panY);
-        ctx.lineTo(pt2.x * zoom + panX, pt2.y * zoom + panY);
-        ctx.stroke();
-      }
-      for (let lt = -75; lt <= 75; lt += 15) {
-        ctx.beginPath();
-        const pt1 = projectCoords(lt, -180);
-        const pt2 = projectCoords(lt, 180);
-        ctx.moveTo(pt1.x * zoom + panX, pt1.y * zoom + panY);
-        ctx.lineTo(pt2.x * zoom + panX, pt2.y * zoom + panY);
-        ctx.stroke();
+      if (performanceMode.current === 'high') {
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.03)';
+        ctx.lineWidth = 1.0;
+        // Draw grid lines mapping 10-degree increments
+        for (let lg = -180; lg <= 180; lg += 15) {
+          ctx.beginPath();
+          const pt1 = projectCoords(-85, lg);
+          const pt2 = projectCoords(85, lg);
+          ctx.moveTo(pt1.x * zoomRef.current + panXRef.current, pt1.y * zoomRef.current + panYRef.current);
+          ctx.lineTo(pt2.x * zoomRef.current + panXRef.current, pt2.y * zoomRef.current + panYRef.current);
+          ctx.stroke();
+        }
+        for (let lt = -75; lt <= 75; lt += 15) {
+          ctx.beginPath();
+          const pt1 = projectCoords(lt, -180);
+          const pt2 = projectCoords(lt, 180);
+          ctx.moveTo(pt1.x * zoomRef.current + panXRef.current, pt1.y * zoomRef.current + panYRef.current);
+          ctx.lineTo(pt2.x * zoomRef.current + panXRef.current, pt2.y * zoomRef.current + panYRef.current);
+          ctx.stroke();
+        }
       }
 
       // --- LAYER 3: INTERACTION, RANGE & MOVEMENT FLOW (Dotted guides / circles) ---
@@ -555,7 +642,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         const elapsed = (now - drawPos.lastTick) / 1000;
         drawPos.lastTick = now;
 
-        if (unit.status === 'moved' && unit.targetLat !== null && unit.targetLng !== null) {
+        if (unit.status === 'moving' && unit.targetLat !== null && unit.targetLng !== null) {
           const speedDegPerSec = unit.speed * 0.15; // Calibrated displacement vector
           const dLat = unit.targetLat - drawPos.lat;
           const dLng = unit.targetLng - drawPos.lng;
@@ -581,14 +668,14 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         }
 
         // Draw movement lines for active trajectories
-        if (unit.status === 'moved' && unit.targetLat !== null && unit.targetLng !== null) {
+        if (unit.status === 'moving' && unit.targetLat !== null && unit.targetLng !== null) {
           const ptStart = projectCoords(drawPos.lat, drawPos.lng);
           const ptEnd = projectCoords(unit.targetLat, unit.targetLng);
 
-          const sx = ptStart.x * zoom + panX;
-          const sy = ptStart.y * zoom + panY;
-          const ex = ptEnd.x * zoom + panX;
-          const ey = ptEnd.y * zoom + panY;
+          const sx = ptStart.x * zoomRef.current + panXRef.current;
+          const sy = ptStart.y * zoomRef.current + panYRef.current;
+          const ex = ptEnd.x * zoomRef.current + panXRef.current;
+          const ey = ptEnd.y * zoomRef.current + panYRef.current;
 
           // Glowing tactical line
           ctx.beginPath();
@@ -606,17 +693,21 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
           ctx.fillStyle = unit.ownerCountryId === currentCountry?.id ? '#06b6d4' : '#ef4444';
           ctx.fill();
 
-          // Combat sparks injection if fighting status triggered
-          if (unit.status === 'fighting' && Math.random() < 0.1) {
-            particlesRef.current.push({
-              x: sx + (Math.random() - 0.5) * 8,
-              y: sy + (Math.random() - 0.5) * 8,
-              vx: (Math.random() - 0.5) * 4,
-              vy: (Math.random() - 0.5) * 4,
-              life: 1.0,
-              color: '#f59e0b',
-            });
-          }
+        }
+
+        // Combat sparks injection if fighting status triggered
+        if (unit.status === 'fighting' && Math.random() < 0.1) {
+          const pt = projectCoords(drawPos.lat, drawPos.lng);
+          const sx = pt.x * zoomRef.current + panXRef.current;
+          const sy = pt.y * zoomRef.current + panYRef.current;
+          particlesRef.current.push({
+            x: sx + (Math.random() - 0.5) * 8,
+            y: sy + (Math.random() - 0.5) * 8,
+            vx: (Math.random() - 0.5) * 4,
+            vy: (Math.random() - 0.5) * 4,
+            life: 1.0,
+            color: '#f59e0b',
+          });
         }
       });
 
@@ -627,14 +718,14 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         const drawPos = drawnPositionsRef.current[liveSelectedId];
         if (selUnit && drawPos) {
           const pt = projectCoords(drawPos.lat, drawPos.lng);
-          const sx = pt.x * zoom + panX;
-          const sy = pt.y * zoom + panY;
+          const sx = pt.x * zoomRef.current + panXRef.current;
+          const sy = pt.y * zoomRef.current + panYRef.current;
 
           const size = 18;
 
           // 1. Dotted range circle around the division
           ctx.beginPath();
-          const rangePx = selUnit.range * 6 * zoom; // scale factor
+          const rangePx = selUnit.range * 6 * zoomRef.current; // scale factor
           ctx.arc(sx, sy, rangePx, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(56, 189, 248, 0.06)';
           ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
@@ -655,20 +746,45 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       }
 
       // --- LAYER 2: سبريتات الوحدات ومؤشرات الصحة (Units Vector Sprites) ---
+      // Army Stacking Mechanism: Group units that are too close on screen
+      const clusters: { x: number; y: number; units: typeof activeUnits }[] = [];
       activeUnits.forEach((unit) => {
         const drawPos = drawnPositionsRef.current[unit.id];
         if (!drawPos) return;
 
         const pt = projectCoords(drawPos.lat, drawPos.lng);
-        const sx = pt.x * zoom + panX;
-        const sy = pt.y * zoom + panY;
+        const sx = pt.x * zoomRef.current + panXRef.current;
+        const sy = pt.y * zoomRef.current + panYRef.current;
 
         // Skip rendering if drastically off screen to optimize resources
         if (sx < -40 || sx > width + 40 || sy < -40 || sy > height + 40) return;
+        
+        let foundCluster = false;
+        if (zoomRef.current < 2.5) { // Only group when zoomed out
+          for (const c of clusters) {
+            const dist = Math.sqrt((c.x - sx) ** 2 + (c.y - sy) ** 2);
+            if (dist < 24) { // px merge threshold
+              c.units.push(unit);
+              foundCluster = true;
+              break;
+            }
+          }
+        }
+        
+        if (!foundCluster) {
+          clusters.push({ x: sx, y: sy, units: [unit] });
+        }
+      });
 
-        const isUnitSelected = liveSelectedId === unit.id;
+      clusters.forEach((cluster) => {
+        const primaryUnit = cluster.units[0];
+        const sx = cluster.x;
+        const sy = cluster.y;
+        
+        const isUnitSelected = cluster.units.some(u => u.id === liveSelectedId);
         const size = isUnitSelected ? 18 : 14;
-        const uColor = unit.color || '#f59e0b';
+        const uColor = primaryUnit.color || '#f59e0b';
+        const stackCount = cluster.units.length;
 
         // Base background division circle
         ctx.beginPath();
@@ -679,8 +795,24 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         ctx.fill();
         ctx.stroke();
 
+        // Stack indicator
+        if (stackCount > 1) {
+          ctx.beginPath();
+          ctx.arc(sx + size, sy - size, 8, 0, Math.PI * 2);
+          ctx.fillStyle = '#ef4444';
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${stackCount}`, sx + size, sy - size);
+        }
+
         // 60FPS Micro Animation Factor
-        const bounceOffset = Math.sin((Date.now() / 150) + unit.id.charCodeAt(0)) * 1.2;
+        const bounceOffset = Math.sin((Date.now() / 150) + primaryUnit.id.charCodeAt(0)) * 1.2;
+
+        const unitListToDraw = performanceMode.current === 'high' ? [primaryUnit] : [primaryUnit]; // Keep reference for scope, but only draw primary face
+        const unit = primaryUnit;
 
         if (unit.type === 'soldier') {
           // --- ULTRA-POLISHED TACTICAL SOLDIER ILLUSTRATION ---
@@ -948,18 +1080,26 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         }
       });
 
-      // Throttle for low end devices (approx 30 FPS instead of 60)
-      setTimeout(() => {
-        animFrame = requestAnimationFrame(render);
-      }, 1000 / 30);
-    };
+    }; // End of render
 
-    render();
+    let lastTime = 0;
+    const targetFPS = performanceMode.current === 'high' ? 60 : 30;
+    const interval = 1000 / targetFPS;
+
+    const renderLoop = (time: number) => {
+      const deltaTime = time - lastTime;
+      if (deltaTime >= interval) {
+        lastTime = time - (deltaTime % interval);
+        render();
+      }
+      animFrame = requestAnimationFrame(renderLoop);
+    };
+    animFrame = requestAnimationFrame(renderLoop);
 
     return () => {
       cancelAnimationFrame(animFrame);
     };
-  }, [loading, geojsonData, selectedProvinceId, zoom, panX, panY, displayMode, currentCountry, countries]);
+  }, [loading, geojsonData, selectedProvinceId, displayMode, currentCountry, countries]);
 
   // Hook DPI-scaled Canvas Size to avoid fuzzy/pixelated visual outputs
   useEffect(() => {
@@ -998,8 +1138,8 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       const realLng = (posX >= 0 && posX <= 100) ? ((posX / 100) * 360 - 180) : posX;
 
       const pt = projectCoords(realLat, realLng);
-      const sx = pt.x * zoom + panX;
-      const sy = pt.y * zoom + panY;
+      const sx = pt.x * zoomRef.current + panXRef.current;
+      const sy = pt.y * zoomRef.current + panYRef.current;
 
       // Spawn 45 majestic fire explosion particles instantly on map canvas!
       for (let i = 0; i < 45; i++) {
@@ -1028,10 +1168,10 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
       const ptStart = projectCoords(realStartLat, realStartLng);
       const ptEnd = projectCoords(realEndLat, realEndLng);
-      const sx = ptStart.x * zoom + panX;
-      const sy = ptStart.y * zoom + panY;
-      const ex = ptEnd.x * zoom + panX;
-      const ey = ptEnd.y * zoom + panY;
+      const sx = ptStart.x * zoomRef.current + panXRef.current;
+      const sy = ptStart.y * zoomRef.current + panYRef.current;
+      const ex = ptEnd.x * zoomRef.current + panXRef.current;
+      const ey = ptEnd.y * zoomRef.current + panYRef.current;
 
       const dx = ex - sx;
       const dy = ey - sy;
@@ -1065,7 +1205,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       window.removeEventListener('map-airstrike', handleAirstrikeEvent);
       window.removeEventListener('map-invasion-march', handleInvasionMarchEvent);
     };
-  }, [zoom, panX, panY, projectCoords]);
+  }, [projectCoords]);
 
   // Handle Dragging / Camera Panning & Unit Selections
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1081,8 +1221,8 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       const drawPos = drawnPositionsRef.current[unit.id];
       if (!drawPos) return false;
       const pt = projectCoords(drawPos.lat, drawPos.lng);
-      const sx = pt.x * zoom + panX;
-      const sy = pt.y * zoom + panY;
+      const sx = pt.x * zoomRef.current + panXRef.current;
+      const sy = pt.y * zoomRef.current + panYRef.current;
       const dist = Math.sqrt((mouseX - sx) ** 2 + (mouseY - sy) ** 2);
       return dist <= 20; // within 20px bubble
     });
@@ -1119,15 +1259,12 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    const unprojected = unprojectPixels(mouseX, mouseY);
-    setHoveredPos({ lat: unprojected.lat, lng: unprojected.lng, x: mouseX, y: mouseY });
-
     // Drag / Pan mechanics (No need to calculate hover hit-tests during dragging/panning!)
     if (isDraggingRef.current) {
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
-      setPanX((prev) => prev + dx);
-      setPanY((prev) => prev + dy);
+      panXRef.current += dx;
+      panYRef.current += dy;
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       return;
     }
@@ -1136,6 +1273,9 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     const now = Date.now();
     if (now - lastHoverCheckRef.current > 33) {
       lastHoverCheckRef.current = now;
+      const unprojected = unprojectPixels(mouseX, mouseY);
+      setHoveredPos({ lat: unprojected.lat, lng: unprojected.lng, x: mouseX, y: mouseY });
+      
       const hit = findProvinceAtCoords(unprojected.lat, unprojected.lng);
       if (hit) {
         setHoveredProvince(hit);
@@ -1153,8 +1293,8 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const zoomFactor = 1.1;
-    const oldZoom = zoom;
-    let newZoom = e.deltaY < 0 ? zoom * zoomFactor : zoom / zoomFactor;
+    const oldZoom = zoomRef.current;
+    let newZoom = e.deltaY < 0 ? zoomRef.current * zoomFactor : zoomRef.current / zoomFactor;
     newZoom = Math.max(0.4, Math.min(8.0, newZoom));
 
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -1163,14 +1303,14 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     const mouseY = e.clientY - rect.top;
 
     const unprojected = unprojectPixels(mouseX, mouseY);
-    setZoom(newZoom);
+    zoomRef.current = newZoom;
 
     // Back project to align camera so point underneath pointer remains stable
     const px = (unprojected.lng + 180) / 360 * virtualWidth;
     const py = (85 - unprojected.lat) / 170 * virtualHeight;
 
-    setPanX(mouseX - px * newZoom);
-    setPanY(mouseY - py * newZoom);
+    panXRef.current = mouseX - px * newZoom;
+    panYRef.current = mouseY - py * newZoom;
   };
 
   // Zoom helpers for mobile devices/onscreen navigation
@@ -1181,14 +1321,14 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     const cy = rect.height / 2;
 
     const unprojected = unprojectPixels(cx, cy);
-    const newZoom = Math.max(0.4, Math.min(8.0, zoom * multiplier));
-    setZoom(newZoom);
+    const newZoom = Math.max(0.4, Math.min(8.0, zoomRef.current * multiplier));
+    zoomRef.current = newZoom;
 
     const px = (unprojected.lng + 180) / 360 * virtualWidth;
     const py = (85 - unprojected.lat) / 170 * virtualHeight;
 
-    setPanX(cx - px * newZoom);
-    setPanY(cy - py * newZoom);
+    panXRef.current = cx - px * newZoom;
+    panYRef.current = cy - py * newZoom;
   };
 
   const handleRecenter = () => {
@@ -1196,9 +1336,9 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     const rect = containerRef.current.getBoundingClientRect();
     const pt = projectCoords(24.0, 45.0);
     const defaultZoom = 1.35;
-    setZoom(defaultZoom);
-    setPanX(rect.width / 2 - pt.x * defaultZoom);
-    setPanY(rect.height / 2 - pt.y * defaultZoom);
+    zoomRef.current = defaultZoom;
+    panXRef.current = rect.width / 2 - pt.x * defaultZoom;
+    panYRef.current = rect.height / 2 - pt.y * defaultZoom;
   };
 
   return (
@@ -1410,7 +1550,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
               <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 mb-3 bg-slate-900/60 p-2.5 rounded-xl border border-slate-900 font-mono">
                 <p>الهجوم: <span className="text-rose-400 font-bold">{selectedUnit.attack}</span></p>
                 <p>المدى: <span className="text-blue-400 font-bold">{selectedUnit.range}</span></p>
-                <p className="col-span-2">الحالة: <span className="text-amber-400 font-bold">{selectedUnit.status === 'moved' ? 'تتحرك 🚀' : selectedUnit.status === 'fighting' ? 'تشتبك ⚔️' : 'متأهبة ✅'}</span></p>
+                <p className="col-span-2">الحالة: <span className="text-amber-400 font-bold">{selectedUnit.status === 'moving' ? 'تتحرك 🚀' : selectedUnit.status === 'fighting' ? 'تشتبك ⚔️' : 'متأهبة ✅'}</span></p>
               </div>
 
               {currentCountry?.id === selectedUnit.ownerCountryId && (

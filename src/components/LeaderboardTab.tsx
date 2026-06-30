@@ -18,8 +18,7 @@ import {
 export const LeaderboardTab: React.FC = () => {
   const { countries, territories, alliances } = useGame();
   
-  // Tabs: 'territories' | 'alliance'
-  const [boardType, setBoardType] = useState<'territories' | 'alliance'>('territories');
+  const [boardType, setBoardType] = useState<string>('territories');
 
   // Helpers to fetch metrics per country
   const getCountryTerritoriesCount = (cid: string) => {

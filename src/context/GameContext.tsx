@@ -86,7 +86,7 @@ interface GameContextType {
   attackTerritory: (territoryId: string, forces: Partial<Army>) => Promise<void>;
   executeAirStrike: (territoryId: string) => Promise<void>;
   resolveClashingBattle: (territoryId: string) => Promise<void>;
-  executeEspionage: (targetCountryId: string, mission: 'intel' | 'steal_oil' | 'steal_gold' | 'sabotage_defense') => Promise<void>;
+  executeEspionage: (targetCountryId: string, mission: 'intel' | 'steal_oil' | 'steal_gold' | 'sabotage_defense' | 'recon', isReconPlane?: boolean) => Promise<void>;
   rechargeCredits: () => Promise<void>;
   addBotCountry: () => Promise<void>;
   
@@ -668,6 +668,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ownerCountryName: data.name,
           flagEmoji: data.flagEmoji,
           color: data.color,
+          isCapital: true,
           garrison: {
             infantry: 40,
             specialForces: 2,

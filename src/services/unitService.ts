@@ -19,7 +19,7 @@ export const updateUnitTarget = async (unitId: string, lat: number, lng: number)
       lng: lng,
       targetLat: lat,
       targetLng: lng,
-      status: 'moved',
+      status: 'moving',
       lastUpdatedAt: Date.now()
     });
   } catch (error) {

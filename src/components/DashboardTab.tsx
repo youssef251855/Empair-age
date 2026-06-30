@@ -27,7 +27,7 @@ import jetImg from '../assets/images/fighter_jet_1781367509068.jpg';
 import missileImg from '../assets/images/missile_unit_1781367527035.jpg';
 
 export const DashboardTab: React.FC = () => {
-  const { currentCountry, buildOrUpgrade, trainArmy, territories } = useGame();
+  const { currentCountry, buildOrUpgrade, trainArmy, territories, selectedMatchId } = useGame();
   
   // Local unit training counters
   const [trainAmounts, setTrainAmounts] = useState<Record<string, number>>({
@@ -69,7 +69,7 @@ export const DashboardTab: React.FC = () => {
             const newUnitId = `unit_${Date.now()}_${Math.random().toString(36).substring(7)}`;
             spawnUnit({
               id: newUnitId,
-              matchId: currentCountry.matchId || '',
+              matchId: selectedMatchId || '',
               ownerCountryId: currentCountry.id,
               ownerCountryName: currentCountry.name,
               color: currentCountry.color || '#f59e0b',
@@ -244,7 +244,7 @@ export const DashboardTab: React.FC = () => {
                 <div key={key} className="bg-slate-900/40 p-4 rounded-lg border border-slate-800/80 hover:border-slate-700/60 transition-all">
                   <div className="flex gap-4 items-center mb-2">
                     <img 
-                      src={getUnitImg(key)} 
+                      src={(getUnitImg(key) as any)?.src || getUnitImg(key)} 
                       alt={item.arabicName} 
                       referrerPolicy="no-referrer"
                       className="w-16 h-16 rounded-xl object-cover border border-slate-800 shadow-md shrink-0 filter brightness-95 hover:brightness-110 hover:scale-105 transition-all duration-300"

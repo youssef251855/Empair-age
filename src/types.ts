@@ -15,6 +15,7 @@ export interface Season {
 
 export interface Country {
   id: string;
+  matchId?: string;
   userId: string;
   name: string;
   flagUrl: string; // can be inline emoji, svg string, or url
@@ -83,6 +84,7 @@ export interface Territory {
   battleAttackerName?: string | null;
   battleReleaseTime?: number | null;
   battleForces?: Partial<Garrison> | null;
+  isCapital?: boolean;
 }
 
 export interface Garrison {
