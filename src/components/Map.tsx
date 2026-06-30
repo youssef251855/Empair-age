@@ -236,7 +236,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         setLoading(true);
         const response = await fetch('/assets/maps/world.geojson');
         if (!response.ok) {
-          throw new Error('Failed to load world map boundary file.');
+          throw new Error('Failed to load map boundary file.');
         }
         const geojson = await response.json();
 

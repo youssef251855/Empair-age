@@ -42,6 +42,7 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
       uniqueCountryIsos.add(countryIso);
       
       const provinceId = feat.properties.id;
+      
       // Calculate a rough bounding center for placement of armies
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       
