@@ -381,7 +381,7 @@ function GameLayout() {
     <div className="min-h-screen bg-[#0b0f19] flex flex-col justify-start">
       
       {/* Dynamic resources strip panel */}
-      <ResourceHeader />
+      <ResourceHeader onOpenSettings={() => handleTabChange('settings')} activeTab={activeTab} />
 
       <main className="max-w-7xl w-full mx-auto px-4 py-6 flex-1 flex flex-col gap-6">
         

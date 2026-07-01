@@ -16,10 +16,16 @@ import {
   ShieldAlert, 
   CalendarClock, 
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Settings
 } from 'lucide-react';
 
-export const ResourceHeader: React.FC = () => {
+interface ResourceHeaderProps {
+  onOpenSettings?: () => void;
+  activeTab?: string;
+}
+
+export const ResourceHeader: React.FC<ResourceHeaderProps> = ({ onOpenSettings, activeTab }) => {
   const { currentCountry, logout, activeSeason, territories, harvestLocalTick, selectedMatchId, matches, rechargeCredits, messages } = useGame();
 
   if (!currentCountry) return null;
@@ -200,6 +206,20 @@ export const ResourceHeader: React.FC = () => {
               className="p-1.5 md:p-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 transition-all active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
             >
               <RefreshCw className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            </button>
+
+            {/* Game Settings */}
+            <button
+              onClick={onOpenSettings}
+              title="إعدادات القيادة والتحكم الفيدرالي"
+              className={`flex items-center gap-1 text-[10px] md:text-xs px-2.5 py-1 md:px-3 md:py-1.5 rounded-lg cursor-pointer transition-all shrink-0 border ${
+                activeTab === 'settings'
+                  ? 'bg-amber-500 border-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                  : 'bg-slate-800/60 hover:bg-slate-800 border-slate-700/80 text-slate-200 hover:text-amber-400'
+              }`}
+            >
+              <Settings className={`w-3.5 h-3.5 shrink-0 ${activeTab === 'settings' ? 'animate-spin-slow' : ''}`} />
+              <span>الإعدادات</span>
             </button>
 
             {/* Sign out */}
