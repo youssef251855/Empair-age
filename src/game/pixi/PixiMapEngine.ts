@@ -84,7 +84,9 @@ export class PixiMapEngine {
       .drag()
       .pinch()
       .wheel()
-      .decelerate();
+      .decelerate()
+      .clampZoom({ minScale: 0.5, maxScale: 8 })
+      .clamp({ direction: 'all' });
 
     this.app.stage.addChild(this.viewport);
 
@@ -116,6 +118,34 @@ export class PixiMapEngine {
 
   // Map interaction events
   public onFeatureClick: ((id: string) => void) | null = null;
+  public displayMode: 'political' | 'alliances' | 'war' | 'resources' = 'political';
+  
+  private lastTerritories: any[] = [];
+  private lastSelectedProvinceId: string | null = null;
+  private lastSelectedMatchId: string | null = null;
+
+  public zoomIn() {
+    if (this.viewport) this.viewport.zoomPercent(0.25, true);
+  }
+
+  public zoomOut() {
+    if (this.viewport) this.viewport.zoomPercent(-0.25, true);
+  }
+
+  public recenter() {
+    if (this.viewport) {
+      this.viewport.animate({
+        time: 500,
+        position: { x: 500, y: 275 }, // Center of virtual world
+        scale: 1
+      });
+    }
+  }
+
+  public setDisplayMode(mode: 'political' | 'alliances' | 'war' | 'resources') {
+    this.displayMode = mode;
+    this.drawMap(this.lastTerritories, this.lastSelectedProvinceId, this.lastSelectedMatchId);
+  }
 
   // Draw political borders and filled shapes using Pixi Graphics
   public renderMapPolygons(features: any[], territories: any[] = [], selectedProvinceId: string | null = null, selectedMatchId: string | null = null) {
@@ -125,6 +155,8 @@ export class PixiMapEngine {
 
   // Draw or Redraw the map without re-fetching GeoJSON
   public drawMap(territories: any[] = [], selectedProvinceId: string | null = null, selectedMatchId: string | null = null) {
+    this.lastTerritories = territories;
+    this.lastSelectedProvinceId = selectedProvinceId;
     this.lastSelectedMatchId = selectedMatchId;
 
     // Virtual Dimensions mapping matching the worldWidth/worldHeight
@@ -150,19 +182,40 @@ export class PixiMapEngine {
       const expectedDbId = selectedMatchId ? `${selectedMatchId}_${featureId}` : featureId;
       const territory = territories?.find(t => t.id === expectedDbId || t.id === featureId);
 
-      // Determine colors
+      // Determine colors based on display mode
       let fillColor = 0x1e293b; // Default independent/neutral color (Slate-800)
       let fillAlpha = 0.5;
       let strokeColor = 0x334155; // Default Slate-700 border
       let strokeWidth = 1;
 
       if (territory) {
-        if (territory.color) {
-          fillColor = parseInt(territory.color.replace('#', '0x'), 16);
-          fillAlpha = 0.75;
-        } else {
-          fillColor = 0x334155; // Uncolored owned territory
-          fillAlpha = 0.6;
+        if (this.displayMode === 'political') {
+          if (territory.color) {
+            fillColor = parseInt(territory.color.replace('#', '0x'), 16);
+            fillAlpha = 0.75;
+          } else {
+            fillColor = 0x334155; // Uncolored owned territory
+            fillAlpha = 0.6;
+          }
+        } else if (this.displayMode === 'resources') {
+          if (territory.type === 'desert') { fillColor = 0xeab308; fillAlpha = 0.6; } // Yellow
+          else if (territory.type === 'coastal') { fillColor = 0x3b82f6; fillAlpha = 0.6; } // Blue
+          else if (territory.type === 'mountain') { fillColor = 0x94a3b8; fillAlpha = 0.6; } // Slate
+          else { fillColor = 0x22c55e; fillAlpha = 0.5; } // Green (plain)
+        } else if (this.displayMode === 'war') {
+          if (territory.battleStatus === 'clashing') {
+            fillColor = 0xef4444; fillAlpha = 0.8; // Red clash
+            strokeColor = 0xb91c1c; strokeWidth = 2;
+          } else if (territory.battleStatus === 'preparing') {
+            fillColor = 0xf97316; fillAlpha = 0.7; // Orange prep
+          } else {
+            fillColor = 0x1e293b; fillAlpha = 0.3; // Dim others
+          }
+        } else if (this.displayMode === 'alliances') {
+           // Simplified alliances (just show owned vs neutral)
+           if (territory.ownerCountryId) {
+             fillColor = 0x8b5cf6; fillAlpha = 0.7; // Purple
+           }
         }
 
         // Highlight selected province with an Amber Gold halo

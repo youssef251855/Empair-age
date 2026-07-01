@@ -15,6 +15,10 @@ import {
   createUserWithEmailAndPassword
 } from 'firebase/auth';
 import { 
+  auth, 
+  db, 
+  handleFirestoreError, 
+  OperationType,
   collection, 
   doc, 
   setDoc, 
@@ -29,8 +33,7 @@ import {
   getDocs,
   serverTimestamp,
   getDoc
-} from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+} from '../lib/firebase';
 import { 
   Country, 
   Territory, 

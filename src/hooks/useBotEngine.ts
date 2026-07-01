@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
-import { collection, getDocs, doc, updateDoc, query, where, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, getDocs, doc, updateDoc, query, where, getDoc, db } from '../lib/firebase';
 import { Country, MapUnit } from '../types';
 import { spawnUnit, updateUnitTarget } from '../services/unitService';
 

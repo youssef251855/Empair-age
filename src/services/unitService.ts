@@ -1,5 +1,4 @@
-import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, doc, setDoc, updateDoc, onSnapshot, query, where, deleteDoc, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { MapUnit } from '../types';
 
 export const spawnUnit = async (unit: MapUnit) => {

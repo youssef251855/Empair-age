@@ -1,5 +1,4 @@
-import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, writeBatch, query, where } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, writeBatch, query, where, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Territory, Garrison, Country, ResourceType } from '../types';
 import { SOVEREIGN_CONFIGS } from './countriesData';
 

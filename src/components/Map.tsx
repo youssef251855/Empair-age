@@ -1574,8 +1574,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
                     onClick={async (e) => {
                       e.stopPropagation();
                       try {
-                        const { getDocs, query, where, collection, doc, updateDoc, deleteDoc } = await import('firebase/firestore');
-                        const { db } = await import('../lib/firebase');
+                        const { getDocs, query, where, collection, doc, updateDoc, deleteDoc, db } = await import('../lib/firebase');
                         const unitsSnapshot = await getDocs(query(collection(db, 'units'), where('matchId', '==', selectedMatchId)));
                         const enemies = unitsSnapshot.docs
                           .map((d) => ({ id: d.id, ...d.data() } as MapUnit))

@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useGame } from '../context/GameContext';
 import { ShoppingCart, Coins, Shield, Swords, Plane } from 'lucide-react';
-import { updateDoc, doc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { updateDoc, doc, db } from '../lib/firebase';
 
 export const MarketTab: React.FC = () => {
   const { currentCountry } = useGame();

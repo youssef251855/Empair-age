@@ -306,8 +306,7 @@ export const MapTab: React.FC = () => {
       const newArmyInfo = { ...currentCountry.army };
       newArmyInfo[armyKey] -= 1;
       
-      const { doc, updateDoc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
+      const { doc, updateDoc, db } = await import('../lib/firebase');
       await updateDoc(doc(db, 'countries', currentCountry.id), {
         army: newArmyInfo
       });
@@ -410,8 +409,7 @@ export const MapTab: React.FC = () => {
   const handleNegotiate = async () => {
     if (!selectedTerritory || !selectedTerritory.ownerCountryId || !currentCountry || !negotiateInput.trim()) return;
     try {
-      const { addDoc, collection } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
+      const { addDoc, collection, db } = await import('../lib/firebase');
       
       const txt = negotiateInput.trim();
       
