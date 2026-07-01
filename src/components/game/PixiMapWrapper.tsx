@@ -11,9 +11,16 @@ interface PixiMapProps {
 export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selectedProvinceId }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<PixiMapEngine | null>(null);
-  const { territories, loading, selectedMatchId } = useGame();
+  const { territories, loading, selectedMatchId, currentCountry } = useGame();
   const [engineReady, setEngineReady] = useState(false);
   const [geoJsonFeatures, setGeoJsonFeatures] = useState<any[] | null>(null);
+  
+  // Refs for stale closures in event listeners
+  const currentCountryRef = useRef(currentCountry);
+  useEffect(() => { currentCountryRef.current = currentCountry; }, [currentCountry]);
+  
+  // Track previous battle statuses to detect NEW attacks
+  const prevBattleStatusRef = useRef<Record<string, string>>({});
 
   // 1. Initialize PIXI engine
   useEffect(() => {
@@ -70,11 +77,37 @@ export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selec
       
   }, [engineReady]);
 
-  // 3. Update political colors dynamically on database updates (Zero Fetch!)
+  // 3. Update political colors dynamically on database updates (Zero Fetch!) & Trigger FX
   useEffect(() => {
     if (!engineReady || !engineRef.current || !geoJsonFeatures) return;
     
     engineRef.current.drawMap(territories, selectedProvinceId, selectedMatchId);
+    
+    // Detect new battles to launch fx
+    const myId = currentCountryRef.current?.id;
+    territories.forEach(terr => {
+      const prevStatus = prevBattleStatusRef.current[terr.id];
+      if (terr.battleStatus === 'clashing' && prevStatus !== 'clashing') {
+        // Only show to attacker and defender
+        if (myId && (terr.battleAttackerId === myId || terr.ownerCountryId === myId)) {
+           // Find attacker's starting territory (capital or random territory)
+           const attackerStartTerr = territories.find(t => t.ownerCountryId === terr.battleAttackerId && t.isCapital) 
+                                  || territories.find(t => t.ownerCountryId === terr.battleAttackerId);
+           if (attackerStartTerr) {
+             // We need color of attacker
+             const attackerColor = attackerStartTerr.color || '#ef4444';
+             engineRef.current?.launchInvasionMarch(
+                attackerStartTerr.posY, attackerStartTerr.posX,
+                terr.posY, terr.posX,
+                attackerColor,
+                30
+             );
+           }
+        }
+      }
+      prevBattleStatusRef.current[terr.id] = terr.battleStatus || 'idle';
+    });
+    
   }, [territories, selectedProvinceId, selectedMatchId, geoJsonFeatures, engineReady]);
 
   // 4. Update units state
@@ -83,14 +116,36 @@ export const PixiMapWrapper: React.FC<PixiMapProps> = ({ onSelectProvince, selec
      
      const unsubscribeUnits = listenToUnits(selectedMatchId, (liveUnits) => {
         if (engineRef.current) {
-          engineRef.current.updateUnits(liveUnits);
+          // Filter units: User only sees their own units, or units from countries that are currently attacking them.
+          const myCountryId = currentCountry?.id;
+          const attackersOfMyCountry = new Set(
+            territories
+              .filter(t => t.ownerCountryId === myCountryId && t.battleStatus === 'clashing' && t.battleAttackerId)
+              .map(t => t.battleAttackerId)
+          );
+          
+          const visibleUnits = liveUnits.filter(unit => {
+            // Admins or observers might not have a country, they see nothing or everything? 
+            // If we have no country, we show nothing (or everything, let's say nothing to be safe)
+            if (!myCountryId) return false;
+            
+            // Show if it's my unit
+            if (unit.ownerCountryId === myCountryId) return true;
+            
+            // Show if the unit belongs to an attacker currently attacking my country
+            if (attackersOfMyCountry.has(unit.ownerCountryId)) return true;
+            
+            return false;
+          });
+          
+          engineRef.current.updateUnits(visibleUnits);
         }
      });
 
      return () => {
        unsubscribeUnits();
      };
-  }, [engineReady, selectedMatchId]);
+  }, [engineReady, selectedMatchId, currentCountry?.id, territories]);
 
   return (
     <div 

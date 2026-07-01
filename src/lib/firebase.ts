@@ -1,16 +1,31 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { getAnalytics } from "firebase/analytics";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAVqk3nwK-_y-mOIdIrutJvukYREfylnMw",
+  authDomain: "empire-age.firebaseapp.com",
+  databaseURL: "https://empire-age-default-rtdb.firebaseio.com",
+  projectId: "empire-age",
+  storageBucket: "empire-age.firebasestorage.app",
+  messagingSenderId: "1050860143748",
+  appId: "1:1050860143748:web:eb24c9d0c69a8448b3aed1",
+  measurementId: "G-M8PELWSPS8"
+};
 
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
+let analytics;
+if (typeof window !== 'undefined') {
+  analytics = getAnalytics(app);
+}
 
 // Initialize Auth & Firestore with Multi-tab Persistent Local Cache for high performance and offline capability
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
   experimentalForceLongPolling: true,
-}, firebaseConfig.firestoreDatabaseId); // <-- Important to pass the DB ID
+});
 export const auth = getAuth(app);
 
 // Connectivity Test

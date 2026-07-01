@@ -23,6 +23,7 @@ export class PixiMapEngine {
   // Map features cached for redrawing
   private mapFeatures: any[] = [];
   private lastSelectedMatchId: string | null = null;
+  private featureGraphicsMap: Map<string, PIXI.Graphics> = new Map();
 
   constructor() {
     this.app = new PIXI.Application();
@@ -93,6 +94,9 @@ export class PixiMapEngine {
     this.viewport.addChild(this.unitsContainer);
     this.viewport.addChild(this.fxContainer);
 
+    // Register ticker
+    this.app.ticker.add(this.updateParticles);
+
     console.log("[PixiMapEngine] Initialized. Resolution:", resolution, "Antialias:", antialias);
   }
 
@@ -123,13 +127,6 @@ export class PixiMapEngine {
   public drawMap(territories: any[] = [], selectedProvinceId: string | null = null, selectedMatchId: string | null = null) {
     this.lastSelectedMatchId = selectedMatchId;
 
-    // To prevent WebGL memory leaks, destroy all child graphics objects before removing them
-    while (this.mapContainer.children.length > 0) {
-      const child = this.mapContainer.getChildAt(0) as PIXI.Graphics;
-      this.mapContainer.removeChildAt(0);
-      child.destroy({ children: true, texture: true, geometry: true });
-    }
-    
     // Virtual Dimensions mapping matching the worldWidth/worldHeight
     const virtualWidth = 1000;
     const virtualHeight = 550;
@@ -148,9 +145,9 @@ export class PixiMapEngine {
       if (!geo) return;
 
       const featureId = feat.properties?.id;
-      const expectedDbId = selectedMatchId ? `${selectedMatchId}_${featureId}` : featureId;
+      if (!featureId) return;
       
-      // Look up target territory state to resolve tactical colors
+      const expectedDbId = selectedMatchId ? `${selectedMatchId}_${featureId}` : featureId;
       const territory = territories?.find(t => t.id === expectedDbId || t.id === featureId);
 
       // Determine colors
@@ -176,42 +173,59 @@ export class PixiMapEngine {
         }
       }
 
-      const featureGraphics = new PIXI.Graphics();
-      featureGraphics.eventMode = 'static';
-      featureGraphics.cursor = 'pointer';
-      
-      featureGraphics.on('pointerdown', () => {
-        if (this.onFeatureClick && featureId) {
-          this.onFeatureClick(featureId);
-        }
-      });
+      let featureGraphics = this.featureGraphicsMap.get(featureId);
+      let needsDraw = false;
 
-      // Highlight on hover
-      featureGraphics.on('pointerover', () => {
-        featureGraphics.alpha = 0.8;
-      });
-      featureGraphics.on('pointerout', () => {
-        featureGraphics.alpha = 1.0;
-      });
+      if (!featureGraphics) {
+        featureGraphics = new PIXI.Graphics();
+        featureGraphics.eventMode = 'static';
+        featureGraphics.cursor = 'pointer';
+        
+        featureGraphics.on('pointerdown', () => {
+          if (this.onFeatureClick && featureId) {
+            this.onFeatureClick(featureId);
+          }
+        });
 
-      const drawRing = (ring: [number, number][]) => {
-         if (ring.length === 0) return;
-         const points: number[] = [];
-         for(let i=0; i<ring.length; i++) {
-           const pt = projectCoords(ring[i][1], ring[i][0]);
-           points.push(pt.x, pt.y);
-         }
-         
-         featureGraphics.poly(points).fill({ color: fillColor, alpha: fillAlpha }).stroke({ width: strokeWidth, color: strokeColor });
-      };
+        // Highlight on hover
+        featureGraphics.on('pointerover', () => {
+          if (featureGraphics) featureGraphics.alpha = 0.8;
+        });
+        featureGraphics.on('pointerout', () => {
+          if (featureGraphics) featureGraphics.alpha = 1.0;
+        });
 
-      if (geo.type === 'Polygon') {
-        geo.coordinates.forEach((ring: any) => drawRing(ring));
-      } else if (geo.type === 'MultiPolygon') {
-        geo.coordinates.forEach((poly: any) => poly.forEach((ring: any) => drawRing(ring)));
+        this.featureGraphicsMap.set(featureId, featureGraphics);
+        this.mapContainer.addChild(featureGraphics);
+        needsDraw = true;
       }
 
-      this.mapContainer.addChild(featureGraphics);
+      // Check if visual state changed to avoid unnecessary redraws
+      const stateKey = `${fillColor}_${fillAlpha}_${strokeColor}_${strokeWidth}`;
+      if ((featureGraphics as any)._lastStateKey !== stateKey) {
+         needsDraw = true;
+         (featureGraphics as any)._lastStateKey = stateKey;
+      }
+
+      if (needsDraw) {
+        featureGraphics.clear();
+        const drawRing = (ring: [number, number][]) => {
+           if (ring.length === 0) return;
+           const points: number[] = [];
+           for(let i=0; i<ring.length; i++) {
+             const pt = projectCoords(ring[i][1], ring[i][0]);
+             points.push(pt.x, pt.y);
+           }
+           
+           featureGraphics!.poly(points).fill({ color: fillColor, alpha: fillAlpha }).stroke({ width: strokeWidth, color: strokeColor });
+        };
+
+        if (geo.type === 'Polygon') {
+          geo.coordinates.forEach((ring: any) => drawRing(ring));
+        } else if (geo.type === 'MultiPolygon') {
+          geo.coordinates.forEach((poly: any) => poly.forEach((ring: any) => drawRing(ring)));
+        }
+      }
     });
   }
 
@@ -236,6 +250,75 @@ export class PixiMapEngine {
     sprite.visible = false;
     this.unitPool.push(sprite);
   }
+
+  // --- FX Particle System ---
+  private particlePool: PIXI.Sprite[] = [];
+  private activeParticles: Set<any> = new Set();
+  
+  public getParticleSprite(): PIXI.Sprite {
+     if (this.particlePool.length > 0) {
+       const spr = this.particlePool.pop()!;
+       spr.visible = true;
+       return spr;
+     }
+     const gr = new PIXI.Graphics();
+     gr.circle(0, 0, 2).fill({ color: 0xffffff });
+     const tex = this.app.renderer.generateTexture(gr);
+     const sprite = new PIXI.Sprite(tex);
+     sprite.anchor.set(0.5);
+     return sprite;
+  }
+
+  public launchInvasionMarch(startLat: number, startLng: number, endLat: number, endLng: number, colorHex: string, count: number) {
+    if (!this.app || !this.app.ticker) return;
+    
+    const virtualWidth = 1000;
+    const virtualHeight = 550;
+    
+    const sx = ((startLng + 180) / 360) * virtualWidth;
+    const sy = ((85 - startLat) / 170) * virtualHeight;
+    const ex = ((endLng + 180) / 360) * virtualWidth;
+    const ey = ((85 - endLat) / 170) * virtualHeight;
+
+    const color = parseInt(colorHex.replace('#', '0x'), 16);
+
+    for (let i = 0; i < count; i++) {
+      const sprite = this.getParticleSprite();
+      sprite.tint = Math.random() < 0.3 ? 0xffffff : color; // Some white flashes
+      
+      const jitterX = (Math.random() - 0.5) * 10;
+      const jitterY = (Math.random() - 0.5) * 10;
+      
+      sprite.x = sx + jitterX;
+      sprite.y = sy + jitterY;
+      
+      const angle = Math.atan2(ey - sy, ex - sx) + (Math.random() - 0.5) * 0.2;
+      const speed = 0.5 + Math.random() * 1.5;
+      const vx = Math.cos(angle) * speed;
+      const vy = Math.sin(angle) * speed;
+      const life = 100 + Math.random() * 200; // frames
+      
+      const p = { sprite, vx, vy, life, maxLife: life };
+      this.activeParticles.add(p);
+      this.fxContainer.addChild(sprite);
+    }
+  }
+
+  private updateParticles = (ticker: PIXI.Ticker) => {
+    for (const p of this.activeParticles) {
+      p.sprite.x += p.vx * ticker.deltaTime;
+      p.sprite.y += p.vy * ticker.deltaTime;
+      p.life -= ticker.deltaTime;
+      p.sprite.alpha = p.life / p.maxLife;
+
+      if (p.life <= 0) {
+        this.fxContainer.removeChild(p.sprite);
+        p.sprite.visible = false;
+        this.particlePool.push(p.sprite);
+        this.activeParticles.delete(p);
+      }
+    }
+  };
 
   private activeUnitSprites: Map<string, PIXI.Sprite> = new Map();
 

@@ -98,17 +98,15 @@ export const useBotEngine = () => {
         }
 
         // Smart Bot Logic: aggressively declare wars against human or other target territories
+        // [Modified]: Bot now only defends its own territories and does not attack others.
         if (Math.random() < 0.40) { // High aggression interval
-          const otherTerritories = territories.filter(t => t.ownerCountryId !== bot.id && t.battleStatus === 'idle');
-          if (otherTerritories.length > 0 && bot.army.infantry >= 30) {
-            // Prefer human territories
-            const humanTerrs = otherTerritories.filter(t => humanCountries.some(hc => hc.id === t.ownerCountryId));
-            const targetPool = humanTerrs.length > 0 && Math.random() < 0.7 ? humanTerrs : otherTerritories;
-            const targetTerr = targetPool[Math.floor(Math.random() * targetPool.length)];
+          const myTerritoriesUnderAttack = territories.filter(t => t.ownerCountryId === bot.id && t.battleStatus === 'clashing');
+          if (myTerritoriesUnderAttack.length > 0 && bot.army.infantry >= 10) {
+            const targetTerr = myTerritoriesUnderAttack[Math.floor(Math.random() * myTerritoriesUnderAttack.length)];
 
-            const forceInfantry = Math.max(10, Math.floor(bot.army.infantry * 0.6));
-            const forceTanks = Math.floor((bot.army.tanks || 0) * 0.6);
-            const forceJets = Math.floor((bot.army.jets || 0) * 0.5);
+            const forceInfantry = Math.max(10, Math.floor(bot.army.infantry * 0.4));
+            const forceTanks = Math.floor((bot.army.tanks || 0) * 0.4);
+            const forceJets = Math.floor((bot.army.jets || 0) * 0.3);
 
             // Deduct from bot
             await updateDoc(doc(db, 'countries', bot.id), {
@@ -117,32 +115,24 @@ export const useBotEngine = () => {
               'army.jets': Math.max(0, (bot.army.jets || 0) - forceJets)
             });
 
-            // Start battle directly!
+            // Reinforce own territory!
             await updateDoc(doc(db, 'territories', targetTerr.id), {
-              battleStatus: 'clashing',
-              battleAttackerId: bot.id,
-              battleAttackerName: bot.name,
-              battleReleaseTime: Date.now() + 15000,
-              battleForces: {
-                infantry: forceInfantry,
-                tanks: forceTanks,
-                jets: forceJets
-              }
+              'battleForces.infantry': (targetTerr.battleForces?.infantry || 0) + forceInfantry,
+              'battleForces.tanks': (targetTerr.battleForces?.tanks || 0) + forceTanks,
+              'battleForces.jets': (targetTerr.battleForces?.jets || 0) + forceJets,
             });
 
-            // Create Visual map invasion march
+            // Create Visual map reinforcement march
             const botCapital = territories.find(t => t.ownerCountryId === bot.id && t.isCapital);
-            const thisBotTerrs = territories.filter(t => t.ownerCountryId === bot.id);
-            if (botCapital || thisBotTerrs.length > 0) {
-              const startTerr = botCapital || thisBotTerrs[0];
+            if (botCapital) {
               window.dispatchEvent(new CustomEvent('map-invasion-march', {
                 detail: {
-                  startLat: startTerr.posY,
-                  startLng: startTerr.posX,
+                  startLat: botCapital.posY,
+                  startLng: botCapital.posX,
                   endLat: targetTerr.posY,
                   endLng: targetTerr.posX,
-                  color: bot.color || '#ef4444',
-                  count: 40
+                  color: bot.color || '#3b82f6',
+                  count: 20
                 }
               }));
             }
