@@ -25,7 +25,11 @@ export const AllianceTab: React.FC = () => {
     createAlliance, 
     joinAlliance, 
     leaveAlliance, 
-    donateResourceToAlliance 
+    donateResourceToAlliance,
+    allianceRequests,
+    sendAllianceRequest,
+    acceptAllianceRequest,
+    declineAllianceRequest
   } = useGame();
 
   const [allianceNameInput, setAllianceNameInput] = useState<string>('');
@@ -66,6 +70,7 @@ export const AllianceTab: React.FC = () => {
   };
 
   const playerAlliance = alliances.find(a => a.id === currentCountry.allianceId);
+  const myAllianceRequests = allianceRequests?.filter(r => r.allianceId === playerAlliance?.id && r.status === 'pending') || [];
 
   return (
     <div className="space-y-6">
@@ -99,6 +104,43 @@ export const AllianceTab: React.FC = () => {
                 {playerAlliance.description || "لم يكتب ميثاق خاص بهذا الحلف بعد، تواصل مع مؤسس الحلف لوضع رؤى وخطة واضحة."}
               </div>
             </div>
+
+            {/* Incoming Requests Panel for Leaders */}
+            {playerAlliance.leaderCountryId === currentCountry.id && myAllianceRequests.length > 0 && (
+              <div className="bg-[#111827] border border-slate-800 rounded-xl p-5 shadow-xl">
+                <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Plus className="text-amber-500 w-4 h-4 animate-pulse" />
+                  طلبات الانضمام الواردة للحلف ({myAllianceRequests.length})
+                </h3>
+                <div className="space-y-3">
+                  {myAllianceRequests.map((req) => (
+                    <div key={req.id} className="bg-slate-900/60 p-3.5 rounded border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-lg">{req.flagEmoji || '🏳️'}</span>
+                        <div>
+                          <strong className="text-slate-200 font-semibold">{req.countryName}</strong>
+                          <span className="text-[10px] text-slate-400 block">مرسلة في: {new Date(req.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => acceptAllianceRequest(req)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded cursor-pointer transition-all active:scale-95"
+                        >
+                          قبول الطلب
+                        </button>
+                        <button
+                          onClick={() => declineAllianceRequest(req)}
+                          className="bg-rose-950/75 hover:bg-rose-900 text-rose-200 font-bold text-xs px-3 py-1.5 rounded border border-rose-800 cursor-pointer transition-all active:scale-95"
+                        >
+                          رفض
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Shared Coalition Treasury Vault */}
             <div className="bg-[#111827] border border-slate-800 rounded-xl p-5 shadow-xl">
@@ -320,12 +362,26 @@ export const AllianceTab: React.FC = () => {
                       <p className="text-[10px] text-slate-500">مؤسس الحلف: <span className="text-slate-300 font-semibold">{a.leaderCountryName}</span></p>
                     </div>
 
-                    <button
-                      onClick={() => joinAlliance(a.id)}
-                      className="w-full bg-slate-800 hover:bg-slate-750 hover:text-amber-400 border border-slate-700 text-slate-200 text-xs py-2 rounded transition-all cursor-pointer font-bold"
-                    >
-                      مبايعة والانضمام للحلف 🎌
-                    </button>
+                    {(() => {
+                      const pendingReq = allianceRequests?.find(
+                        r => r.allianceId === a.id && r.countryId === currentCountry.id && r.status === 'pending'
+                      );
+                      if (pendingReq) {
+                        return (
+                          <div className="w-full bg-slate-950 text-slate-500 border border-slate-900 text-center text-xs py-2 rounded font-semibold">
+                            ⏳ تم إرسال الطلب، وبانتظار رد القائد
+                          </div>
+                        );
+                      }
+                      return (
+                        <button
+                          onClick={() => sendAllianceRequest(a.id)}
+                          className="w-full bg-slate-800 hover:bg-slate-750 hover:text-amber-400 border border-slate-700 text-slate-200 text-xs py-2 rounded transition-all cursor-pointer font-bold"
+                        >
+                          إرسال طلب انضمام إلى قائد التحالف 🎌
+                        </button>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>

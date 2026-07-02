@@ -45,7 +45,8 @@ import {
   Spy, 
   Army,
   Garrison,
-  GameMatch
+  GameMatch,
+  AllianceRequest
 } from '../types';
 import { seedProvincesFromGeoJSON } from '../services/provinceService';
 import { 
@@ -99,6 +100,10 @@ interface GameContextType {
   joinAlliance: (allianceId: string) => Promise<void>;
   leaveAlliance: () => Promise<void>;
   donateResourceToAlliance: (resource: 'gold' | 'oil' | 'iron' | 'food', amount: number) => Promise<void>;
+  allianceRequests: AllianceRequest[];
+  sendAllianceRequest: (allianceId: string) => Promise<void>;
+  acceptAllianceRequest: (request: AllianceRequest) => Promise<void>;
+  declineAllianceRequest: (request: AllianceRequest) => Promise<void>;
   
   // Communication
   sendChatMessage: (text: string) => Promise<void>;
@@ -123,6 +128,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [battles, setBattles] = useState<BattleReport[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [spies, setSpies] = useState<Spy[]>([]);
+  const [allianceRequests, setAllianceRequests] = useState<AllianceRequest[]>([]);
   const [activeSeason, setActiveSeason] = useState<{ id: string; number: number; startTime: string; title: string } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -414,6 +420,26 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAlliances(list);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'alliances');
+    });
+    return () => unsub();
+  }, [currentUser, selectedMatchId]);
+
+  // Monitor alliance requests for the selected match
+  useEffect(() => {
+    if (!currentUser) return;
+    if (!selectedMatchId) {
+      setAllianceRequests([]);
+      return;
+    }
+    const q = query(collection(db, 'alliance_requests'), where('matchId', '==', selectedMatchId));
+    const unsub = onSnapshot(q, (snap) => {
+      const list: AllianceRequest[] = [];
+      snap.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() } as AllianceRequest);
+      });
+      setAllianceRequests(list);
+    }, (error) => {
+      console.error("Error listing alliance requests: ", error);
     });
     return () => unsub();
   }, [currentUser, selectedMatchId]);
@@ -1561,6 +1587,94 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const sendAllianceRequest = async (allianceId: string) => {
+    if (!currentCountry || !selectedMatchId) return;
+    const alliance = alliances.find(a => a.id === allianceId);
+    if (!alliance) return;
+
+    // Check if request already exists
+    const existing = allianceRequests.find(r => r.allianceId === allianceId && r.countryId === currentCountry.id && r.status === 'pending');
+    if (existing) {
+      alert("لقد قمت بإرسال طلب انضمام بالفعل لهذا التحالف، وهو قيد الانتظار حالياً.");
+      return;
+    }
+
+    const requestId = `request_${Date.now()}_${currentCountry.id}`;
+    const newRequest: AllianceRequest = {
+      id: requestId,
+      matchId: selectedMatchId,
+      allianceId: alliance.id,
+      allianceName: alliance.name,
+      countryId: currentCountry.id,
+      countryName: currentCountry.name,
+      flagEmoji: currentCountry.flagUrl || '🏳️',
+      leaderCountryId: alliance.leaderCountryId,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await setDoc(doc(db, 'alliance_requests', requestId), newRequest);
+      alert("تم إرسال طلب الانضمام إلى قائد التحالف بنجاح!");
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, `alliance_requests/${requestId}`);
+    }
+  };
+
+  const acceptAllianceRequest = async (request: AllianceRequest) => {
+    if (!currentCountry) return;
+    const alliance = alliances.find(a => a.id === request.allianceId);
+    if (!alliance) return;
+
+    if (alliance.leaderCountryId !== currentCountry.id) {
+      alert("أنت لست قائد هذا التحالف لتقبل هذا الطلب!");
+      return;
+    }
+
+    // Add member to alliance
+    const newMembers = [...(alliance.members || []), {
+      countryId: request.countryId,
+      countryName: request.countryName,
+      flagEmoji: request.flagEmoji,
+      role: 'member' as const
+    }];
+
+    try {
+      // 1. Update alliance members
+      await updateDoc(doc(db, 'alliances', request.allianceId), { members: newMembers });
+      
+      // 2. Update country with alliance details
+      await updateDoc(doc(db, 'countries', request.countryId), {
+        allianceId: request.allianceId,
+        allianceName: alliance.name
+      });
+
+      // 3. Update request status or delete it
+      await deleteDoc(doc(db, 'alliance_requests', request.id));
+
+      // 4. Send chat message informing about acceptance
+      await sendChatMessage(`📢 انضمت جمهورية [${request.countryName}] رسمياً إلى صفوف حلف [${alliance.name}]!`);
+      alert(`تم قبول انضمام [${request.countryName}] إلى التحالف.`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `alliances/${request.allianceId}`);
+    }
+  };
+
+  const declineAllianceRequest = async (request: AllianceRequest) => {
+    if (!currentCountry) return;
+    if (request.leaderCountryId !== currentCountry.id) {
+      alert("أنت لست قائد هذا التحالف لترفض هذا الطلب!");
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'alliance_requests', request.id));
+      alert(`تم رفض طلب انضمام [${request.countryName}].`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `alliance_requests/${request.id}`);
+    }
+  };
+
   // Chats Stream Messaging
   const sendChatMessage = async (text: string) => {
     if (!currentCountry || !selectedMatchId) return;
@@ -2143,6 +2257,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       battles,
       messages,
       spies,
+      allianceRequests,
       activeSeason,
       loading,
       activeChatTab,
@@ -2173,6 +2288,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       joinAlliance,
       leaveAlliance,
       donateResourceToAlliance,
+      sendAllianceRequest,
+      acceptAllianceRequest,
+      declineAllianceRequest,
       
       sendChatMessage,
       setChatConfig,

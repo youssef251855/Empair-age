@@ -259,3 +259,17 @@ export interface GameMatch {
   active: boolean;
 }
 
+export interface AllianceRequest {
+  id: string;
+  matchId: string;
+  allianceId: string;
+  allianceName: string;
+  countryId: string;
+  countryName: string;
+  flagEmoji: string;
+  leaderCountryId: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt: string;
+}
+
+

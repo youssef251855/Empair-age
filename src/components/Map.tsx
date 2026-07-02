@@ -182,8 +182,8 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
   // Helper to resolve province colors based on active displays overlay
   const getProvinceColor = (prov: ProvinceState): string => {
     if (prov.battleStatus === 'clashing') {
-      const alpha = 0.35 + 0.25 * Math.sin(Date.now() / 150);
-      return `rgba(239, 68, 68, ${alpha})`; // Flashing Battle Zone Red/Orange War Indicator
+      const alpha = 0.45 + 0.15 * Math.sin(Date.now() / 150);
+      return `rgba(239, 68, 68, ${alpha})`; // Flashing Battle Zone Red
     }
 
     if (displayMode === 'resources') {
@@ -193,7 +193,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       if (spec === 'iron') return 'rgba(71, 85, 105, 0.5)';   // Slate Iron
       if (spec === 'food') return 'rgba(22, 163, 74, 0.4)';  // Agricultural Green
       if (spec === 'electricity') return 'rgba(2, 132, 199, 0.45)'; // Cobalt Energy
-      return 'rgba(30, 41, 59, 0.3)';
+      return 'rgba(148, 163, 184, 0.15)';
     }
 
     if (displayMode === 'war') {
@@ -201,29 +201,28 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       const forces = (g?.infantry || 0) + (g?.specialForces || 0) + (g?.tanks || 0) + (g?.artillery || 0) + (g?.jets || 0);
       if (forces > 45) return 'rgba(153, 27, 27, 0.65)'; // Crimson Bunker
       if (forces > 10) return 'rgba(185, 28, 28, 0.4)';  // Active Conflict zone
-      return 'rgba(15, 23, 42, 0.75)'; // Peaceful sector
+      return 'rgba(148, 163, 184, 0.25)'; // Slate gray for peaceful sector
     }
 
-    if (displayMode === 'alliances') {
-      if (!prov.ownerCountryId) return 'rgba(75, 85, 99, 0.15)';
-      if (prov.ownerCountryId === currentCountry?.id) return 'rgba(37, 99, 235, 0.55)'; // Friendly blue
-      
-      // Look up target sovereign state in live countries list to find formal military alliance membership
-      const targetCountry = countries?.find(c => c.id === prov.ownerCountryId);
-      if (currentCountry?.allianceId && 
-          targetCountry?.allianceId && 
-          currentCountry.allianceId !== "" &&
-          targetCountry.allianceId !== "" &&
-          targetCountry.allianceId === currentCountry.allianceId) {
-        return 'rgba(16, 185, 129, 0.55)'; // Allies (Green)
-      }
-      return 'rgba(148, 163, 184, 0.25)'; // Independent neutral countries colored in Slate-Gray instead of aggressive Red
+    // Default & Alliances coloring mode (Gray map with Green for Allies, Red for Active Battles/Wars)
+    if (!prov.ownerCountryId) return 'rgba(148, 163, 184, 0.1)';
+
+    // Check if friendly (us or alliance member)
+    const isFriendly = prov.ownerCountryId === currentCountry?.id || (
+      currentCountry?.allianceId &&
+      countries?.find(c => c.id === prov.ownerCountryId)?.allianceId === currentCountry.allianceId
+    );
+
+    if (isFriendly) {
+      return 'rgba(34, 197, 94, 0.55)'; // Elegant Emerald Green for Alliance
     }
 
-    // Default Political colors
-    if (!prov.ownerCountryId) return 'rgba(148, 163, 184, 0.08)';
-    const cleanColor = sanitizeColorForTacticalTheme(prov.color);
-    return cleanColor ? `${cleanColor}66` : 'rgba(75, 85, 99, 0.35)';
+    // Check if under occupation/war or clashing
+    if (prov.occupyingCountryId && prov.occupyingCountryId !== prov.ownerCountryId) {
+      return 'rgba(239, 68, 68, 0.55)'; // War/Occupation Red
+    }
+
+    return 'rgba(100, 116, 139, 0.25)'; // Default neutral/other Slate Gray
   };
 
   // 1. Fetch GeoJSON and Listen to Live Data
