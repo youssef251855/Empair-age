@@ -1,11 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useGame } from '../context/GameContext';
-import { collection, getDocs, doc, updateDoc, query, where, getDoc, db } from '../lib/firebase';
-import { Country, MapUnit } from '../types';
-import { spawnUnit, updateUnitTarget } from '../services/unitService';
+import { collection, getDocs, query, where, db } from '../lib/firebase';
+import { MapUnit } from '../types';
 
-// Bot Engine Logic
-// Runs for active players to simulate bot countries if nobody else takes them
 export const useBotEngine = () => {
   const { selectedMatchId, countries, territories } = useGame();
   const botIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -17,138 +14,29 @@ export const useBotEngine = () => {
     const runBotLogic = async () => {
       if (isEngaged) return;
       isEngaged = true;
-      // 1. Identify which countries are bots (no userId attached or marked as bot)
-      const botCountries = countries.filter(c => c.isBot || !c.userId || c.userId.startsWith('bot_'));
-      const humanCountries = countries.filter(c => c.userId && !c.userId.startsWith('bot_'));
 
-      if (botCountries.length === 0) return;
-
-      const unitsRef = collection(db, 'units');
-      const unitsSnapshot = await getDocs(query(unitsRef, where('matchId', '==', selectedMatchId)));
-      const allUnits = unitsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as MapUnit));
-
-      // 2. Iterate through each bot country
-      for (const bot of botCountries) {
-        // Collect bot resources
-        let goldVal = bot.gold;
-        let infantryVal = bot.army.infantry;
-
-        // Ensure Bot has minimum resources (cheat)
-        if (infantryVal < 5) {
-          infantryVal += 10;
-          await updateDoc(doc(db, 'countries', bot.id), {
-            'army.infantry': infantryVal,
-            gold: goldVal + 1000
-          });
-        }
-
-        const myUnits = allUnits.filter(u => u.ownerCountryId === bot.id);
+      try {
+        const { AIManager } = await import('../managers/AIManager');
         
-        // Spawn units if we have fewer than 3 units on map
-        if (myUnits.length < 3 && infantryVal > 0) {
-          // Find bot's own territories to spawn its units inside its own country
-          const botTerrs = (territories || []).filter(t => t.ownerCountryId === bot.id);
-          let spawnLat = 24.0 + (Math.random() * 5 - 2.5);
-          let spawnLng = 45.0 + (Math.random() * 5 - 2.5);
+        // Fetch all units
+        const unitsRef = collection(db, 'units');
+        const q = query(unitsRef, where('matchId', '==', selectedMatchId));
+        const snapshot = await getDocs(q);
+        const allUnits = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as MapUnit));
 
-          if (botTerrs.length > 0) {
-            const randomTerr = botTerrs[Math.floor(Math.random() * botTerrs.length)];
-            spawnLng = (randomTerr.posX / 100) * 360 - 180;
-            spawnLat = 90 - (randomTerr.posY / 100) * 180;
-            spawnLat += (Math.random() * 1.0 - 0.5);
-            spawnLng += (Math.random() * 1.0 - 0.5);
-          }
-          
-          await spawnUnit({
-            id: `bot_unit_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-            matchId: selectedMatchId,
-            ownerCountryId: bot.id,
-            ownerCountryName: bot.name,
-            color: bot.color || '#64748b',
-            type: 'soldier',
-            hp: 100,
-            maxHp: 100,
-            attack: 15,
-            speed: 4,
-            range: 2,
-            lat: spawnLat,
-            lng: spawnLng,
-            targetLat: null,
-            targetLng: null,
-            status: 'idle',
-            lastUpdatedAt: Date.now()
-          });
-          continue; // spawned this turn, skip movement
-        }
-
-        // Move idle units towards human countries
-        for (const unit of myUnits) {
-          if (unit.status === 'idle') {
-            // Find target lat/lng: human centroid or just random
-            if (humanCountries.length > 0) {
-              const targetCountry = humanCountries[Math.floor(Math.random() * humanCountries.length)];
-              // We don't have accurate centroid in Country obj, let's just make them move towards central hot zone or random near 24, 45
-              const targetLat = 24.0 + (Math.random() * 10 - 5);
-              const targetLng = 45.0 + (Math.random() * 10 - 5);
-              
-              await updateUnitTarget(unit.id, targetLat, targetLng);
-            }
-          }
-        }
-
-        // Smart Bot Logic: aggressively declare wars against human or other target territories
-        // [Modified]: Bot now only defends its own territories and does not attack others.
-        if (Math.random() < 0.40) { // High aggression interval
-          const myTerritoriesUnderAttack = territories.filter(t => t.ownerCountryId === bot.id && t.battleStatus === 'clashing');
-          if (myTerritoriesUnderAttack.length > 0 && bot.army.infantry >= 10) {
-            const targetTerr = myTerritoriesUnderAttack[Math.floor(Math.random() * myTerritoriesUnderAttack.length)];
-
-            const forceInfantry = Math.max(10, Math.floor(bot.army.infantry * 0.4));
-            const forceTanks = Math.floor((bot.army.tanks || 0) * 0.4);
-            const forceJets = Math.floor((bot.army.jets || 0) * 0.3);
-
-            // Deduct from bot
-            await updateDoc(doc(db, 'countries', bot.id), {
-              'army.infantry': Math.max(0, bot.army.infantry - forceInfantry),
-              'army.tanks': Math.max(0, (bot.army.tanks || 0) - forceTanks),
-              'army.jets': Math.max(0, (bot.army.jets || 0) - forceJets)
-            });
-
-            // Reinforce own territory!
-            await updateDoc(doc(db, 'territories', targetTerr.id), {
-              'battleForces.infantry': (targetTerr.battleForces?.infantry || 0) + forceInfantry,
-              'battleForces.tanks': (targetTerr.battleForces?.tanks || 0) + forceTanks,
-              'battleForces.jets': (targetTerr.battleForces?.jets || 0) + forceJets,
-            });
-
-            // Create Visual map reinforcement march
-            const botCapital = territories.find(t => t.ownerCountryId === bot.id && t.isCapital);
-            if (botCapital) {
-              window.dispatchEvent(new CustomEvent('map-invasion-march', {
-                detail: {
-                  startLat: botCapital.posY,
-                  startLng: botCapital.posX,
-                  endLat: targetTerr.posY,
-                  endLng: targetTerr.posX,
-                  color: bot.color || '#3b82f6',
-                  count: 20
-                }
-              }));
-            }
-          }
-        }
+        await AIManager.getInstance().tickBots(selectedMatchId, countries, territories, allUnits);
+      } catch (err) {
+        console.error("Bot Engine Error: ", err);
+      } finally {
+        isEngaged = false;
       }
-      isEngaged = false;
     };
 
-    // Stagger to prevent instant collision if multiple clients are there
-    const delay = Math.random() * 5000;
-    setTimeout(() => {
-        botIntervalRef.current = setInterval(runBotLogic, 20000); // Check every 20 secs
-    }, delay);
+    if (botIntervalRef.current) clearInterval(botIntervalRef.current);
+    botIntervalRef.current = setInterval(runBotLogic, 20000); // Check every 20 secs
 
     return () => {
       if (botIntervalRef.current) clearInterval(botIntervalRef.current);
     };
-  }, [selectedMatchId, countries]);
+  }, [selectedMatchId, countries, territories]);
 };

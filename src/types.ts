@@ -85,6 +85,9 @@ export interface Territory {
   battleReleaseTime?: number | null;
   battleForces?: Partial<Garrison> | null;
   isCapital?: boolean;
+  defenseValue?: number; // 🛡 Defense value
+  occupationProgress?: number; // 0 to 100
+  occupyingCountryId?: string | null;
 }
 
 export interface Garrison {
@@ -244,6 +247,7 @@ export interface MapUnit {
   lng: number;
   targetLat: number | null;
   targetLng: number | null;
+  arrivalTime?: number | null;
   status: 'idle' | 'moving' | 'fighting';
   lastUpdatedAt: number; // timestamp for movement interpolation
 }

@@ -546,9 +546,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
               const cleanName = dbProv.name.split(' - ')[1] || dbProv.name.split(' ')[0] || dbProv.name;
               const flag = dbProv.flagEmoji || '🏳️';
-              const totalTroops = dbProv.garrison ? (dbProv.garrison.infantry + dbProv.garrison.tanks + dbProv.garrison.specialForces + dbProv.garrison.artillery + dbProv.garrison.jets) : 0;
-              
-              const displayText = zoomRef.current > 3.0 ? `${flag} ${cleanName} [${totalTroops}]` : `${flag} [${totalTroops}]`;
+              const displayText = zoomRef.current > 3.0 ? `${flag} ${cleanName}` : `${flag}`;
 
               // Draw soft text background box
               ctx.font = 'bold 8px Cairo, sans-serif';
@@ -564,6 +562,31 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
 
               ctx.fillStyle = isSelected ? '#f59e0b' : '#cbd5e1';
               ctx.fillText(displayText, sx, sy + 0.5);
+
+              // 🛡 Defense Value
+              if (dbProv.defenseValue !== undefined) {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '7px Cairo, sans-serif';
+                ctx.fillText(`🛡 ${Math.round(dbProv.defenseValue)}`, sx, sy + 12);
+              }
+
+              // ⚔️ Occupation Progress Bar
+              if (dbProv.occupationProgress !== undefined && dbProv.occupationProgress > 0) {
+                const barWidth = 24;
+                const barHeight = 4;
+                const barX = sx - barWidth / 2;
+                const barY = sy - 12;
+
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+                ctx.fillRect(barX, barY, barWidth, barHeight);
+
+                ctx.fillStyle = '#ef4444'; // Red occupation progress
+                ctx.fillRect(barX, barY, barWidth * (dbProv.occupationProgress / 100), barHeight);
+                
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(barX, barY, barWidth, barHeight);
+              }
             }
           }
         });
@@ -1236,7 +1259,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     // 2. If in move mode, issue target vector or combat attack command
     if (unitMoveMode && selectedUnit && selectedUnit.ownerCountryId === currentCountry?.id) {
       // Find what province lay underneath the target coordinates
-      updateUnitTarget(selectedUnit.id, unprojected.lat, unprojected.lng);
+      updateUnitTarget(selectedUnit.id, selectedUnit.lat, selectedUnit.lng, unprojected.lat, unprojected.lng, selectedUnit.speed);
       setUnitMoveMode(false);
       return;
     }

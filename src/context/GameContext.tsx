@@ -878,23 +878,62 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     try {
-      // 1. Mark territory under active clash in Firestore (Delayed 15-second timer)
-      const cSecs = 15;
-      await updateDoc(doc(db, 'territories', target.id), {
-        battleStatus: 'clashing',
-        battleAttackerId: currentCountry.id,
-        battleAttackerName: currentCountry.name,
-        battleReleaseTime: Date.now() + (cSecs * 1000),
-        battleForces: {
-          infantry: forces.infantry || 0,
-          specialForces: forces.specialForces || 0,
-          tanks: forces.tanks || 0,
-          artillery: forces.artillery || 0,
-          antiAir: forces.antiAir || 0,
-          jets: forces.jets || 0,
-          missiles: forces.missiles || 0
-        }
-      });
+      // 1. Calculate start and end coordinates
+      const startTerr = territories.find(t => t.ownerCountryId === currentCountry.id && t.isCapital) 
+                     || territories.find(t => t.ownerCountryId === currentCountry.id);
+      
+      let startLat = 0, startLng = 0;
+      if (startTerr) {
+        startLat = (startTerr.posY >= 0 && startTerr.posY <= 100) ? (90 - (startTerr.posY / 100) * 180) : startTerr.posY;
+        startLng = (startTerr.posX >= 0 && startTerr.posX <= 100) ? ((startTerr.posX / 100) * 360 - 180) : startTerr.posX;
+      }
+      
+      const targetLat = (target.posY >= 0 && target.posY <= 100) ? (90 - (target.posY / 100) * 180) : target.posY;
+      const targetLng = (target.posX >= 0 && target.posX <= 100) ? ((target.posX / 100) * 360 - 180) : target.posX;
+
+      // 2. Spawn a moving MapUnit
+      const { spawnUnit, updateUnitTarget } = await import('../services/unitService');
+      const unitId = `unit_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+      
+      // Calculate total attack strength of the forces
+      const attInf = (forces.infantry || 0) * 1;
+      const attSec = (forces.specialForces || 0) * 2;
+      const attTan = (forces.tanks || 0) * 5;
+      const attArt = (forces.artillery || 0) * 6;
+      const attAntiAir = (forces.antiAir || 0) * 4;
+      const attJet = (forces.jets || 0) * 12;
+      const attMissile = (forces.missiles || 0) * 20;
+      const totalAttackStrength = attInf + attSec + attTan + attArt + attAntiAir + attJet + attMissile;
+
+      // Determine unit visual type
+      let unitType: 'soldier' | 'tank' | 'jet' | 'base' | 'missile' = 'soldier';
+      if (forces.jets && forces.jets > 0) unitType = 'jet';
+      else if (forces.tanks && forces.tanks > 0) unitType = 'tank';
+
+      const unitParams: MapUnit = {
+        id: unitId,
+        matchId: selectedMatchId!,
+        ownerCountryId: currentCountry.id,
+        ownerCountryName: currentCountry.name,
+        color: currentCountry.color || '#ef4444',
+        type: unitType,
+        hp: totalAttackStrength * 10,
+        maxHp: totalAttackStrength * 10,
+        attack: totalAttackStrength,
+        speed: unitType === 'jet' ? 120 : (unitType === 'tank' ? 60 : 30),
+        range: 5,
+        lat: startLat,
+        lng: startLng,
+        targetLat: null,
+        targetLng: null,
+        status: 'idle',
+        lastUpdatedAt: Date.now()
+      };
+
+      await spawnUnit(unitParams);
+      
+      // Dispatch movement command immediately
+      await updateUnitTarget(unitId, startLat, startLng, targetLat, targetLng, unitParams.speed);
 
       // Update player reserves and deduct resources
       await updateDoc(doc(db, 'countries', currentCountry.id), {
@@ -902,22 +941,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         oil: currentCountry.oil - requiredOil,
         gold: currentCountry.gold - requiredGold
       });
-
-      // Dispatch visual march event to simulate invading forces!
-      const startTerr = territories.find(t => t.ownerCountryId === currentCountry.id && t.isCapital) 
-                     || territories.find(t => t.ownerCountryId === currentCountry.id);
-      if (startTerr) {
-        window.dispatchEvent(new CustomEvent('map-invasion-march', {
-          detail: {
-            startLat: startTerr.posY,
-            startLng: startTerr.posX,
-            endLat: target.posY,
-            endLng: target.posX,
-            color: currentCountry.color || '#ef4444',
-            count: 35
-          }
-        }));
-      }
 
       // Broadcast the march / engagement alert to global chat so all players see real-time crisis!
       await sendChatMessage(`🚨 تحرك عسكري مباغت! جبهة دبابات وفصائل مشاة تابعة لـ [${currentCountry.name}] تزحف لخرق الحدود واجتياح مقاطعة [${target.name}]. دفاعات الحامية تستنفر بالقصوى! جاري الاشتباك والمصادمة البرمائية التكتيكية... حسم المعركة خلال ${cSecs} ثانية جارية!`);
@@ -2029,6 +2052,61 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Global background scanning loop to automatically resolve active clashes whose timers have elapsed
   const territoriesRef = useRef<Territory[]>([]);
   useEffect(() => { territoriesRef.current = territories; }, [territories]);
+  const countriesRef = useRef<Country[]>([]);
+  useEffect(() => { countriesRef.current = countries; }, [countries]);
+
+  useEffect(() => {
+    const handleUnitArrived = async (e: any) => {
+      const { unit } = e.detail;
+      if (!currentCountry) return;
+      
+      const { OccupationManager } = await import('../managers/OccupationManager');
+      
+      // Find which territory it arrived at
+      const targetTerritory = territoriesRef.current.find(t => 
+        Math.abs(unit.lat - (90 - (t.posY / 100) * 180)) < 2 &&
+        Math.abs(unit.lng - ((t.posX / 100) * 360 - 180)) < 2
+      );
+
+      if (targetTerritory) {
+        await OccupationManager.getInstance().startOccupation(targetTerritory, unit);
+      }
+    };
+
+    window.addEventListener('unit-arrived', handleUnitArrived);
+    return () => window.removeEventListener('unit-arrived', handleUnitArrived);
+  }, [currentCountry]);
+
+  // Hook up the GameManager
+  useEffect(() => {
+    if (currentCountry) {
+      import('../managers/GameManager').then(({ GameManager }) => {
+        GameManager.getInstance().init(currentCountry.id);
+      });
+    }
+    return () => {
+      import('../managers/GameManager').then(({ GameManager }) => {
+        GameManager.getInstance().stop();
+      });
+    };
+  }, [currentCountry]);
+
+  // Core tick for units and occupation
+  useEffect(() => {
+    const coreInterval = setInterval(async () => {
+      if (currentCountry) {
+        const { GameManager } = await import('../managers/GameManager');
+        const { getDocs, query, collection, where, db } = await import('../lib/firebase');
+        // Fetch active units
+        const unitsSnapshot = await getDocs(query(collection(db, 'units'), where('matchId', '==', selectedMatchId)));
+        const units = unitsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as any));
+        
+        GameManager.getInstance().tickCore(units, territoriesRef.current, countriesRef.current);
+      }
+    }, 2000); // Check every 2 seconds
+
+    return () => clearInterval(coreInterval);
+  }, [currentCountry, selectedMatchId]);
 
   useEffect(() => {
     if (!selectedMatchId) return;

@@ -352,7 +352,7 @@ export const MapTab: React.FC = () => {
 
     try {
       await attackTerritory(selectedTerritory.id, forces);
-      alert('تم إعلان الحرب وتوجيه قواتك! القوات تزحف الآن نحو المقاطعة المستهدفة، سيستغرق الاشتباك بعض الثواني حتى يحسم القرار.');
+      
       const updated = territories.find(item => item.id === selectedTerritory.id);
       if (updated) {
         setSelectedTerritory(updated);

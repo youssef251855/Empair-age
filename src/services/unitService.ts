@@ -10,14 +10,19 @@ export const spawnUnit = async (unit: MapUnit) => {
   }
 };
 
-export const updateUnitTarget = async (unitId: string, lat: number, lng: number) => {
+export const updateUnitTarget = async (unitId: string, unitLat: number, unitLng: number, targetLat: number, targetLng: number, speed: number) => {
   try {
     const docRef = doc(db, 'units', unitId);
+    
+    const dLat = targetLat - unitLat;
+    const dLng = targetLng - unitLng;
+    const distance = Math.sqrt(dLat * dLat + dLng * dLng);
+    const timeToArriveMs = (distance / (speed * 0.15)) * 1000;
+    
     await updateDoc(docRef, {
-      lat: lat,
-      lng: lng,
-      targetLat: lat,
-      targetLng: lng,
+      targetLat: targetLat,
+      targetLng: targetLng,
+      arrivalTime: Date.now() + timeToArriveMs,
       status: 'moving',
       lastUpdatedAt: Date.now()
     });
