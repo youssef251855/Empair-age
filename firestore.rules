@@ -88,5 +88,10 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update, delete: if isSignedIn();
     }
+
+    // 13. Alliance Requests
+    match /alliance_requests/{requestId} {
+      allow read, create, update, delete: if isSignedIn();
+    }
   }
 }

@@ -17,8 +17,8 @@ export class PixiMapEngine {
   public fogContainer: PIXI.Container;
   
   // Object pooling for high performance
-  private unitPool: PIXI.Sprite[] = [];
-  private activeUnits: Map<string, PIXI.Sprite> = new Map();
+  private unitPool: PIXI.Container[] = [];
+  private activeUnits: Map<string, PIXI.Container> = new Map();
 
   // Map features cached for redrawing
   private mapFeatures: any[] = [];
@@ -56,7 +56,7 @@ export class PixiMapEngine {
     await this.app.init({
       width: options.width || 800,
       height: options.height || 500,
-      backgroundColor: 0x0f172a, // match slate-900
+      backgroundColor: 0x14161b, // sleek military charcoal gray
       resolution: resolution,
       autoDensity: true,
       antialias: antialias,
@@ -183,10 +183,10 @@ export class PixiMapEngine {
       const territory = territories?.find(t => t.id === expectedDbId || t.id === featureId);
 
       // Determine colors based on display mode
-      let fillColor = 0x1e293b; // Default independent/neutral color (Slate-800)
-      let fillAlpha = 0.5;
-      let strokeColor = 0x334155; // Default Slate-700 border
-      let strokeWidth = 1;
+      let fillColor = 0x2e3138; // Default independent/neutral color (Steel Gray)
+      let fillAlpha = 0.6;
+      let strokeColor = 0x474a52; // Sleek dark steel borders
+      let strokeWidth = 0.8;
 
       if (territory) {
         if (this.displayMode === 'political') {
@@ -194,7 +194,7 @@ export class PixiMapEngine {
             fillColor = parseInt(territory.color.replace('#', '0x'), 16);
             fillAlpha = 0.75;
           } else {
-            fillColor = 0x334155; // Uncolored owned territory
+            fillColor = 0x2e3138; // Uncolored owned territory
             fillAlpha = 0.6;
           }
         } else if (this.displayMode === 'resources') {
@@ -209,7 +209,7 @@ export class PixiMapEngine {
           } else if (territory.battleStatus === 'preparing') {
             fillColor = 0xf97316; fillAlpha = 0.7; // Orange prep
           } else {
-            fillColor = 0x1e293b; fillAlpha = 0.3; // Dim others
+            fillColor = 0x2e3138; fillAlpha = 0.3; // Dim others
           }
         } else if (this.displayMode === 'alliances') {
            // Simplified alliances (just show owned vs neutral)
@@ -283,25 +283,59 @@ export class PixiMapEngine {
   }
 
   // Object Pooling for UI Units
-  public getUnitSprite(type: string): PIXI.Sprite {
+  public getUnitSprite(type: string, colorHex: string = '#f59e0b'): PIXI.Container {
+    let container: PIXI.Container;
     if (this.unitPool.length > 0) {
-      const spr = this.unitPool.pop()!;
-      spr.visible = true;
-      return spr;
+      container = this.unitPool.pop()!;
+      container.visible = true;
+    } else {
+      container = new PIXI.Container();
+      
+      const bg = new PIXI.Graphics();
+      bg.name = 'bg';
+      container.addChild(bg);
+      
+      const icon = new PIXI.Sprite();
+      icon.name = 'icon';
+      icon.anchor.set(0.5);
+      container.addChild(icon);
     }
-    const gr = new PIXI.Graphics();
-    gr.circle(0, 0, 5).fill({ color: 0xffffff });
+
+    const bg = container.getChildByName('bg') as PIXI.Graphics;
+    const icon = container.getChildByName('icon') as PIXI.Sprite;
+
+    const color = parseInt(colorHex.replace('#', '0x'), 16);
     
-    // Convert to texture for max performance rather than drawing graphics each frame
-    const tex = this.app.renderer.generateTexture(gr);
-    const sprite = new PIXI.Sprite(tex);
-    sprite.anchor.set(0.5);
-    return sprite;
+    // Redraw background circle with country border
+    bg.clear();
+    bg.circle(0, 0, 14).fill({ color: 0x0f172a, alpha: 0.95 });
+    bg.stroke({ width: 2.5, color: color });
+
+    // Set texture based on unit type
+    let textureUrl = '/icons/soldier.png';
+    if (type === 'tank') {
+      textureUrl = '/icons/tank.png';
+    } else if (type === 'jet' || type === 'missile') {
+      textureUrl = '/icons/military_plane.png';
+    }
+
+    try {
+      icon.texture = PIXI.Texture.from(textureUrl);
+    } catch (e) {
+      console.warn("Failed to load unit texture:", textureUrl, e);
+    }
+    
+    // Scale image nicely inside the circle
+    icon.width = 18;
+    icon.height = 18;
+    icon.tint = 0xffffff; 
+    
+    return container;
   }
 
-  public returnUnitSprite(sprite: PIXI.Sprite) {
-    sprite.visible = false;
-    this.unitPool.push(sprite);
+  public returnUnitSprite(container: PIXI.Container) {
+    container.visible = false;
+    this.unitPool.push(container);
   }
 
   // --- FX Particle System ---
@@ -373,7 +407,7 @@ export class PixiMapEngine {
     }
   };
 
-  private activeUnitSprites: Map<string, PIXI.Sprite> = new Map();
+  private activeUnitSprites: Map<string, PIXI.Container> = new Map();
 
   public updateUnits(units: any[]) {
     if (!this.viewport) return;
@@ -413,8 +447,7 @@ export class PixiMapEngine {
 
       let sprite = this.activeUnitSprites.get(unit.id);
       if (!sprite) {
-        sprite = this.getUnitSprite(unit.type);
-        sprite.tint = unit.color ? parseInt(unit.color.replace('#', '0x'), 16) : 0xffffff;
+        sprite = this.getUnitSprite(unit.type, unit.color || '#f59e0b');
         this.unitsContainer.addChild(sprite);
         this.activeUnitSprites.set(unit.id, sprite);
       }
