@@ -1,16 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Monitor, ShieldAlert, Cpu } from 'lucide-react';
+import { Settings, Monitor, ShieldAlert, Cpu, Bell, BellRing } from 'lucide-react';
 import { useGame } from '../context/GameContext';
 
 export const SettingsTab: React.FC = () => {
   const { logout, currentUser } = useGame();
   
   const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'medium' | 'high'>('high');
+  const [notificationPermission, setNotificationPermission] = useState<string>('default');
 
   useEffect(() => {
     const savedQuality = localStorage.getItem('graphicsQuality') as ('low' | 'medium' | 'high') | null;
     if (savedQuality) {
       setGraphicsQuality(savedQuality);
+    }
+    
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
     }
   }, []);
 
@@ -19,6 +24,63 @@ export const SettingsTab: React.FC = () => {
     localStorage.setItem('graphicsQuality', quality);
     // Reload the page slightly to apply changes seamlessly, or we can just trigger a state change in Map
     window.location.reload();
+  };
+
+  const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('متصفحك الحالي لا يدعم ميزة الإشعارات.');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') {
+        alert('🎉 تم تفعيل الإشعارات بنجاح! ستتلقى تنبيهات حية ومباشرة عن المعارك والرسائل.');
+      } else if (permission === 'denied') {
+        alert('⚠️ تم رفض إذن الإشعارات. لتفعيلها، يرجى السماح بها من إعدادات القفل في شريط عنوان المتصفح.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const sendTestNotification = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('ميزة الإشعارات غير مدعومة في متصفحك.');
+      return;
+    }
+
+    if (Notification.permission !== 'granted') {
+      alert('الرجاء الضغط على زر "طلب وتفعيل الإشعارات" أولاً لتتمكن من تلقي الإشعارات.');
+      return;
+    }
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        if (registration && 'showNotification' in registration) {
+          registration.showNotification('إمباير إيدج | Empire Age ⚔️', {
+            body: 'هذا إشعار تجريبي للتأكد من عمل نظام التنبيهات المتقدم بنجاح! 🚀',
+            icon: '/icons/logo.png',
+            tag: 'test-notification',
+            badge: '/icons/logo.png'
+          });
+          return;
+        }
+      }
+    } catch (swErr) {
+      console.warn("Could not send test notification via ServiceWorker, trying direct construction:", swErr);
+    }
+
+    try {
+      new Notification('إمباير إيدج | Empire Age ⚔️', {
+        body: 'هذا إشعار تجريبي للتأكد من عمل نظام التنبيهات المتقدم بنجاح! 🚀',
+        icon: '/icons/logo.png',
+      });
+    } catch (err) {
+      alert('فشل إرسال الإشعار المباشر، تأكد من أنك قمت بتفعيل الإشعارات في متصفحك.');
+    }
   };
 
   return (
@@ -33,6 +95,55 @@ export const SettingsTab: React.FC = () => {
 
       <div className="space-y-8">
         
+        {/* PWA & Notifications Settings */}
+        <div className="bg-[#111827] border border-slate-800 rounded-xl p-6">
+          <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2">
+            <Bell className="w-5 h-5 text-amber-500" />
+            تنبيهات الهاتف وإشعارات PWA المتقدمة
+          </h3>
+          
+          <p className="text-sm text-slate-400 mb-6 font-mono">
+            احصل على تنبيهات لحظية فورية على هاتفك أو حاسوبك حتى لو لم تكن اللعبة مفتوحة! ستصلك إشعارات عند اندلاع المعارك، تلقي برقيات دبلوماسية، أو عند تعرض أراضيك لغزو عسكري.
+          </p>
+
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 rounded-lg bg-slate-900/60 border border-slate-800/80">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="p-2 bg-amber-500/10 rounded-lg">
+                <BellRing className="w-6 h-6 text-amber-400" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-200 text-sm">حالة إذن الإشعارات الحالي:</div>
+                <div className="text-xs mt-0.5">
+                  {notificationPermission === 'granted' ? (
+                    <span className="text-emerald-400 font-bold">● مفعلة ونشطة بالكامل ✅</span>
+                  ) : notificationPermission === 'denied' ? (
+                    <span className="text-rose-400 font-bold">● محظورة ⚠️ (يرجى إعطاء الصلاحية من المتصفح)</span>
+                  ) : (
+                    <span className="text-amber-400 font-bold">● لم يتم الطلب بعد (انتظار تفعيل الصلاحية)</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 w-full md:w-auto">
+              {notificationPermission !== 'granted' && (
+                <button
+                  onClick={requestNotificationPermission}
+                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 px-5 py-2 rounded-lg font-black text-xs transition-all cursor-pointer"
+                >
+                  تفعيل الإشعارات الآن 🔔
+                </button>
+              )}
+              <button
+                onClick={sendTestNotification}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-5 py-2 rounded-lg font-bold text-xs transition-all cursor-pointer border border-slate-700"
+              >
+                إرسال إشعار تجريبي 🎯
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Graphics & Performance Settings */}
         <div className="bg-[#111827] border border-slate-800 rounded-xl p-6">
           <h3 className="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2">
