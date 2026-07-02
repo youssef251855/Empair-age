@@ -181,14 +181,34 @@ export const DashboardTab: React.FC = () => {
           <div className="space-y-4">
             {Object.entries(BUILDING_DEFS).map(([key, item]) => {
               const typedKey = key as keyof typeof BUILDING_DEFS;
+              const currentLevel = currentCountry.buildings?.[typedKey] || 0;
+              
+              // Calculate dynamic cost
+              const costMultiplier = currentLevel === 0 ? 1.0 : currentLevel * 1.5;
+              const dynamicCost = {
+                gold: Math.floor(item.cost.gold * costMultiplier),
+                iron: Math.floor(item.cost.iron * costMultiplier),
+                oil: Math.floor(item.cost.oil * costMultiplier)
+              };
+
               return (
                 <div key={key} className="bg-slate-900/60 p-4 rounded-lg border border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-extrabold text-slate-200">{item.arabicName}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-amber-400 border border-slate-700 font-mono">
-                        المستوى 1
-                      </span>
+                      {currentLevel === 0 ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-950 text-slate-400 border border-slate-800 font-mono">
+                          غير مبني ⚒️
+                        </span>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded text-[10px] border font-mono ${
+                          currentLevel === 5 
+                            ? 'bg-amber-950/40 text-amber-300 border-amber-800' 
+                            : 'bg-slate-800 text-amber-400 border-slate-700'
+                        }`}>
+                          المستوى {currentLevel} {currentLevel === 5 && '👑 (الأقصى)'}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 leading-relaxed">{item.description}</p>
                     <div className="text-[11px] text-[#10b981] font-semibold flex items-center gap-1">
@@ -197,19 +217,26 @@ export const DashboardTab: React.FC = () => {
                     </div>
                     
                     {/* Construction Cost row */}
-                    <div className="text-[10px] text-slate-400 pt-1.5 flex gap-3">
-                      <span>الذهب: <strong className="text-amber-500">{item.cost.gold}</strong></span>
-                      <span>الحديد: <strong className="text-slate-300">{item.cost.iron}</strong></span>
-                      <span>النفط: <strong className="text-blue-400">{item.cost.oil}</strong></span>
-                    </div>
+                    {currentLevel < 5 && (
+                      <div className="text-[10px] text-slate-400 pt-1.5 flex gap-3">
+                        <span>الذهب: <strong className="text-amber-500">{dynamicCost.gold}</strong></span>
+                        <span>الحديد: <strong className="text-slate-300">{dynamicCost.iron}</strong></span>
+                        <span>النفط: <strong className="text-blue-400">{dynamicCost.oil}</strong></span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Construct Trigger */}
                   <button
+                    disabled={currentLevel >= 5}
                     onClick={() => buildOrUpgrade(typedKey)}
-                    className="shrink-0 bg-gradient-to-l from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-slate-950 font-bold text-xs px-4 py-2 border border-amber-400/30 rounded cursor-pointer transition-all hover:shadow-lg active:scale-95"
+                    className={`shrink-0 text-slate-950 font-bold text-xs px-4 py-2 border rounded cursor-pointer transition-all hover:shadow-lg active:scale-95 ${
+                      currentLevel >= 5
+                        ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed active:scale-100'
+                        : 'bg-gradient-to-l from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 border-amber-400/30'
+                    }`}
                   >
-                    بناء / ترقية ➕
+                    {currentLevel === 0 ? 'بناء بمستوى 1 ➕' : currentLevel >= 5 ? 'مكتمل التطوير ✔️' : `ترقية لمستوى ${currentLevel + 1} 🚀`}
                   </button>
                 </div>
               );

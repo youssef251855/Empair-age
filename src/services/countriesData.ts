@@ -269,3 +269,81 @@ export const SOVEREIGN_CONFIGS: Record<string, { name: string; flag: string; col
   GLP: { name: "جزر غالاباغوس", flag: "🇪🇨", color: "#eab308", capital: "بويرتو باكيريزو مورينو", desc: "جزر غنية بالتنوع البيولوجي الفريد تابعة للإكوادور." },
 
 };
+
+export function getRealisticStartingArmy(iso: string): {
+  infantry: number;
+  specialForces: number;
+  tanks: number;
+  artillery: number;
+  antiAir: number;
+  jets: number;
+  reconPlanes: number;
+  warships: number;
+  submarines: number;
+  missiles: number;
+} {
+  const custom: Record<string, Partial<Record<string, number>>> = {
+    CHN: { infantry: 2200, specialForces: 220, tanks: 580, artillery: 310, antiAir: 150, jets: 120, reconPlanes: 40, warships: 35, submarines: 25, missiles: 100 },
+    IND: { infantry: 1450, specialForces: 140, tanks: 460, artillery: 400, antiAir: 120, jets: 80, reconPlanes: 30, warships: 15, submarines: 16, missiles: 60 },
+    USA: { infantry: 1350, specialForces: 200, tanks: 550, artillery: 250, antiAir: 110, jets: 220, reconPlanes: 60, warships: 40, submarines: 30, missiles: 80 },
+    RUS: { infantry: 1300, specialForces: 180, tanks: 650, artillery: 480, antiAir: 140, jets: 150, reconPlanes: 35, warships: 20, submarines: 24, missiles: 150 },
+    PRK: { infantry: 1280, specialForces: 100, tanks: 350, artillery: 400, antiAir: 80, jets: 40, reconPlanes: 10, warships: 5, submarines: 15, missiles: 90 },
+    PAK: { infantry: 650, specialForces: 60, tanks: 220, artillery: 160, antiAir: 45, jets: 35, reconPlanes: 12, warships: 4, submarines: 5, missiles: 40 },
+    IRN: { infantry: 610, specialForces: 50, tanks: 180, artillery: 200, antiAir: 40, jets: 25, reconPlanes: 10, warships: 4, submarines: 3, missiles: 50 },
+    KOR: { infantry: 550, specialForces: 55, tanks: 210, artillery: 220, antiAir: 50, jets: 50, reconPlanes: 15, warships: 10, submarines: 12, missiles: 30 },
+    VNM: { infantry: 480, specialForces: 40, tanks: 130, artillery: 150, antiAir: 35, jets: 20, reconPlanes: 8, warships: 3, submarines: 4, missiles: 20 },
+    EGY: { infantry: 440, specialForces: 45, tanks: 300, artillery: 180, antiAir: 60, jets: 45, reconPlanes: 12, warships: 6, submarines: 4, missiles: 30 },
+    TUR: { infantry: 425, specialForces: 50, tanks: 220, artillery: 150, antiAir: 40, jets: 40, reconPlanes: 10, warships: 8, submarines: 6, missiles: 25 },
+    SAU: { infantry: 225, specialForces: 30, tanks: 120, artillery: 80, antiAir: 35, jets: 45, reconPlanes: 12, warships: 4, submarines: 0, missiles: 20 },
+    ISR: { infantry: 170, specialForces: 40, tanks: 150, artillery: 60, antiAir: 40, jets: 50, reconPlanes: 15, warships: 3, submarines: 3, missiles: 25 },
+    DZA: { infantry: 310, specialForces: 25, tanks: 160, artillery: 110, antiAir: 35, jets: 30, reconPlanes: 10, warships: 4, submarines: 3, missiles: 15 },
+    MAR: { infantry: 200, specialForces: 20, tanks: 110, artillery: 90, antiAir: 30, jets: 25, reconPlanes: 8, warships: 3, submarines: 0, missiles: 10 },
+    UKR: { infantry: 900, specialForces: 80, tanks: 350, artillery: 380, antiAir: 80, jets: 35, reconPlanes: 25, warships: 1, submarines: 0, missiles: 40 },
+    BRA: { infantry: 360, specialForces: 30, tanks: 120, artillery: 90, antiAir: 35, jets: 30, reconPlanes: 10, warships: 6, submarines: 5, missiles: 15 },
+    GBR: { infantry: 150, specialForces: 35, tanks: 80, artillery: 60, antiAir: 30, jets: 45, reconPlanes: 15, warships: 12, submarines: 8, missiles: 20 },
+    FRA: { infantry: 205, specialForces: 35, tanks: 90, artillery: 70, antiAir: 30, jets: 50, reconPlanes: 15, warships: 10, submarines: 8, missiles: 20 },
+    DEU: { infantry: 180, specialForces: 25, tanks: 70, artillery: 50, antiAir: 25, jets: 35, reconPlanes: 10, warships: 5, submarines: 4, missiles: 10 },
+    JPN: { infantry: 247, specialForces: 30, tanks: 110, artillery: 80, antiAir: 40, jets: 50, reconPlanes: 15, warships: 18, submarines: 14, missiles: 15 },
+    IRQ: { infantry: 193, specialForces: 15, tanks: 80, artillery: 60, antiAir: 20, jets: 15, reconPlanes: 5, warships: 1, submarines: 0, missiles: 10 },
+    SYR: { infantry: 150, specialForces: 15, tanks: 90, artillery: 80, antiAir: 25, jets: 15, reconPlanes: 5, warships: 1, submarines: 0, missiles: 15 },
+    ITA: { infantry: 165, specialForces: 20, tanks: 80, artillery: 55, antiAir: 25, jets: 40, reconPlanes: 10, warships: 8, submarines: 4, missiles: 12 },
+    ESP: { infantry: 120, specialForces: 15, tanks: 60, artillery: 45, antiAir: 20, jets: 30, reconPlanes: 8, warships: 6, submarines: 3, missiles: 10 },
+    TWN: { infantry: 169, specialForces: 20, tanks: 80, artillery: 70, antiAir: 30, jets: 35, reconPlanes: 10, warships: 4, submarines: 2, missiles: 15 },
+    COL: { infantry: 290, specialForces: 15, tanks: 50, artillery: 60, antiAir: 15, jets: 15, reconPlanes: 5, warships: 4, submarines: 3, missiles: 5 },
+    SDN: { infantry: 100, specialForces: 10, tanks: 40, artillery: 30, antiAir: 15, jets: 10, reconPlanes: 4, warships: 1, submarines: 0, missiles: 5 },
+    YEM: { infantry: 120, specialForces: 8, tanks: 30, artillery: 25, antiAir: 10, jets: 5, reconPlanes: 2, warships: 0, submarines: 0, missiles: 10 },
+    JOR: { infantry: 100, specialForces: 15, tanks: 60, artillery: 45, antiAir: 20, jets: 20, reconPlanes: 5, warships: 0, submarines: 0, missiles: 10 },
+    KWT: { infantry: 45, specialForces: 8, tanks: 30, artillery: 20, antiAir: 10, jets: 15, reconPlanes: 3, warships: 1, submarines: 0, missiles: 5 },
+    ARE: { infantry: 65, specialForces: 12, tanks: 45, artillery: 30, antiAir: 15, jets: 25, reconPlanes: 5, warships: 2, submarines: 0, missiles: 5 },
+    QAT: { infantry: 16, specialForces: 4, tanks: 10, artillery: 8, antiAir: 5, jets: 10, reconPlanes: 2, warships: 1, submarines: 0, missiles: 3 },
+    OMN: { infantry: 42, specialForces: 6, tanks: 20, artillery: 15, antiAir: 10, jets: 10, reconPlanes: 2, warships: 1, submarines: 0, missiles: 3 },
+    LBN: { infantry: 75, specialForces: 5, tanks: 15, artillery: 12, antiAir: 5, jets: 0, reconPlanes: 0, warships: 0, submarines: 0, missiles: 2 }
+  };
+
+  const base = {
+    infantry: 40,
+    specialForces: 4,
+    tanks: 8,
+    artillery: 10,
+    antiAir: 5,
+    jets: 2,
+    reconPlanes: 1,
+    warships: 0,
+    submarines: 0,
+    missiles: 1
+  };
+
+  const c = custom[iso] || {};
+  return {
+    infantry: c.infantry ?? base.infantry,
+    specialForces: c.specialForces ?? base.specialForces,
+    tanks: c.tanks ?? base.tanks,
+    artillery: c.artillery ?? base.artillery,
+    antiAir: c.antiAir ?? base.antiAir,
+    jets: c.jets ?? base.jets,
+    reconPlanes: c.reconPlanes ?? base.reconPlanes,
+    warships: c.warships ?? base.warships,
+    submarines: c.submarines ?? base.submarines,
+    missiles: c.missiles ?? base.missiles
+  };
+}

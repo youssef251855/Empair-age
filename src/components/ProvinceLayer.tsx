@@ -69,9 +69,22 @@ export const ProvinceLayer: React.FC<ProvinceLayerProps> = ({
 
     // Default Political Mode
     if (!prov.ownerCountryId) {
-      return 'rgba(100, 116, 139, 0.08)'; // Translucent soft grey so the natural basemap shows underneath
+      return 'rgba(148, 163, 184, 0.15)'; // Grey neutral
     }
-    return prov.color || '#4b5563';
+    
+    // Check if friendly (us or alliance member)
+    const isFriendly = prov.ownerCountryId === currentCountryId;
+    if (isFriendly) {
+      return 'rgba(34, 197, 94, 0.65)'; // Elegant Emerald Green for Alliance
+    }
+
+    // Check if under occupation/war or clashing
+    if (prov.occupyingCountryId && prov.occupyingCountryId !== prov.ownerCountryId) {
+      return 'rgba(239, 68, 68, 0.65)'; // Occupied is Red
+    }
+
+    // Default neutral slate grey
+    return 'rgba(148, 163, 184, 0.35)';
   };
 
   const [zoomLevel, setZoomLevel] = useState<number>(3);

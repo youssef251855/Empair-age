@@ -1,6 +1,6 @@
 import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, writeBatch, query, where, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Territory, Garrison, Country, ResourceType } from '../types';
-import { SOVEREIGN_CONFIGS } from './countriesData';
+import { SOVEREIGN_CONFIGS, getRealisticStartingArmy } from './countriesData';
 
 // Types representing Leaflet-based Province Extensions
 export interface ProvinceState extends Territory {
@@ -118,18 +118,7 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
         taxRate: 15,
         allianceId: null,
         allianceName: null,
-        army: {
-          infantry: 150,
-          specialForces: 15,
-          tanks: 8,
-          artillery: 12,
-          antiAir: 5,
-          jets: 3,
-          reconPlanes: 2,
-          warships: 1,
-          submarines: 1,
-          missiles: 1
-        },
+        army: getRealisticStartingArmy(iso),
         createdAt: new Date().toISOString(),
         lastHarvestTime: new Date().toISOString(),
         isBot: true,

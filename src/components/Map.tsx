@@ -192,7 +192,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
   // Helper to resolve province colors based on active displays overlay
   const getProvinceColor = (prov: ProvinceState): string => {
     if (prov.battleStatus === 'clashing') {
-      const alpha = 0.45 + 0.15 * Math.sin(Date.now() / 150);
+      const alpha = 0.55 + 0.15 * Math.sin(Date.now() / 150);
       return `rgba(239, 68, 68, ${alpha})`; // Flashing Battle Zone Red
     }
 
@@ -215,7 +215,7 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     }
 
     // Default & Alliances coloring mode (Gray map with Green for Allies, Red for Active Battles/Wars)
-    if (!prov.ownerCountryId) return 'rgba(148, 163, 184, 0.1)';
+    if (!prov.ownerCountryId) return 'rgba(148, 163, 184, 0.15)';
 
     // Check if friendly (us or alliance member)
     const isFriendly = prov.ownerCountryId === currentCountry?.id || (
@@ -224,15 +224,17 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
     );
 
     if (isFriendly) {
-      return 'rgba(34, 197, 94, 0.55)'; // Elegant Emerald Green for Alliance
+      return 'rgba(34, 197, 94, 0.65)'; // Elegant Emerald Green for Alliance
     }
 
     // Check if under occupation/war or clashing
     if (prov.occupyingCountryId && prov.occupyingCountryId !== prov.ownerCountryId) {
-      return 'rgba(239, 68, 68, 0.55)'; // War/Occupation Red
+      const occupier = countries?.find(c => c.id === prov.occupyingCountryId);
+      return occupier ? occupier.color : 'rgba(249, 115, 22, 0.65)'; // Occupier's color or Warning Orange
     }
 
-    return 'rgba(100, 116, 139, 0.25)'; // Default neutral/other Slate Gray
+    // Default map color is slate grey for other/neutral nations as requested
+    return 'rgba(148, 163, 184, 0.35)'; 
   };
 
   // 1. Fetch GeoJSON and Listen to Live Data
@@ -434,8 +436,8 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
       const width = canvas.width / dpr;
       const height = canvas.height / dpr;
 
-      // Clear with dark, high-contrast tactical command colors
-      ctx.fillStyle = '#060814';
+      // Clear with dark, high-contrast tactical ocean and command colors
+      ctx.fillStyle = '#0a172e';
       ctx.fillRect(0, 0, width, height);
 
       // --- LAYER 1: الأرض والجغرافيا (Map Background + Polygons) ---

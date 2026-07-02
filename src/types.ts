@@ -49,6 +49,7 @@ export interface Country {
   isBanned?: boolean;
   isBot?: boolean;          // Whether controlled by a dynamic AI bot
   empireCredits: number;    // Premium Gold Credits currency 💎
+  buildings?: Record<string, number>; // Maps building type key to current level (1-5)
   research?: {
     military: number;
     defense: number;

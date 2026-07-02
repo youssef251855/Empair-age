@@ -56,7 +56,7 @@ import {
   WORLD_EVENT_TEMPLATES, 
   RESEARCH_TECHS 
 } from '../lib/gameData';
-import { SOVEREIGN_CONFIGS } from '../services/countriesData';
+import { SOVEREIGN_CONFIGS, getRealisticStartingArmy } from '../services/countriesData';
 
 interface GameContextType {
   currentUser: FirebaseUser | null;
@@ -481,7 +481,24 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let foodGain = 15;
     let powerTotal = 25;
 
-    // Build contributions
+    // Build contributions based on Level 1-5 building progression
+    const countryBuildings = currentCountry.buildings || {};
+    if (countryBuildings.mine) {
+      ironGain += countryBuildings.mine * 30; // Level 1: +30, Level 5: +150
+    }
+    if (countryBuildings.farm) {
+      foodGain += countryBuildings.farm * 35; // Level 1: +35, Level 5: +175
+    }
+    if (countryBuildings.factory) {
+      oilGain += countryBuildings.factory * 25; // Level 1: +25, Level 5: +125
+    }
+    if (countryBuildings.power_station) {
+      powerTotal += countryBuildings.power_station * 80; // Level 1: +80, Level 5: +400
+    }
+    if (countryBuildings.research_center) {
+      goldGain += countryBuildings.research_center * 40; // Level 1: +40, Level 5: +200
+    }
+
     const taxRate = currentCountry.taxRate || 20;
     // Morale change based on tax rate: low taxes boost morale, excessive taxes drain it
     const moraleChange = taxRate > 60 ? -5 : (taxRate > 45 ? -2 : (taxRate < 20 ? 6 : 4));
@@ -711,18 +728,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       taxRate: 15,
       allianceId: null,
       allianceName: null,
-      army: {
-        infantry: 150,
-        specialForces: 10,
-        tanks: 5,
-        artillery: 10,
-        antiAir: 0,
-        jets: 2,
-        reconPlanes: 0,
-        warships: 0,
-        submarines: 0,
-        missiles: 0
-      },
+      army: getRealisticStartingArmy("EGY"),
       createdAt: new Date().toISOString(),
       lastHarvestTime: new Date().toISOString(),
       isBot: false,
@@ -771,35 +777,61 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentCountry) return;
     const def = BUILDING_DEFS[type];
     
+    // Determine current level and check maximum
+    const currentLevel = currentCountry.buildings?.[type] || 0;
+    if (currentLevel >= 5) {
+      alert("⚠️ وصلت هذه المنشأة بالفعل إلى المستوى الأقصى (مستوى 5)!");
+      return;
+    }
+
+    // Cost multiplier starts at 1x, then increases: level 1 to 2 is 1.5x, 2 to 3 is 2.5x, etc.
+    const costMultiplier = currentLevel === 0 ? 1.0 : currentLevel * 1.5;
+    const dynamicCost = {
+      gold: Math.floor(def.cost.gold * costMultiplier),
+      iron: Math.floor(def.cost.iron * costMultiplier),
+      oil: Math.floor(def.cost.oil * costMultiplier)
+    };
+
     let useCredits = false;
-    if (currentCountry.gold < def.cost.gold || currentCountry.iron < def.cost.iron || currentCountry.oil < def.cost.oil) {
+    if (currentCountry.gold < dynamicCost.gold || currentCountry.iron < dynamicCost.iron || currentCountry.oil < dynamicCost.oil) {
       const premiumCost = 150;
       if ((currentCountry.empireCredits || 0) >= premiumCost) {
-        const confirmCredits = window.confirm(`الموارد الحالية غير كافية لعملية التشييد. هل ترغب في تمويل المنشأة فورياً بدعم لوجستي عاجل بقيمة ${premiumCost} 💎 من السندات الإمبراطورية؟`);
+        const confirmCredits = window.confirm(`الموارد الحالية غير كافية لعملية التشييد/الترقية. هل ترغب في تمويل المنشأة فورياً بدعم لوجستي عاجل بقيمة ${premiumCost} 💎 من السندات الإمبراطورية؟`);
         if (confirmCredits) {
           useCredits = true;
         } else {
           return;
         }
       } else {
-        alert("عذراً، الخزانة الوطنية لا تمتلك الموارد الكافية لتشييد هذا الصرح الاستراتيجي، ورصيد السندات الحربية غير كافٍ كذلك!");
+        alert("عذراً، الخزانة الوطنية لا تمتلك الموارد الكافية لتشييد أو ترقية هذا الصرح الاستراتيجي، ورصيد السندات الحربية غير كافٍ كذلك!");
         return;
       }
     }
 
+    const nextLevel = currentLevel + 1;
+    const updatedBuildings = {
+      ...(currentCountry.buildings || {}),
+      [type]: nextLevel
+    };
+
     const updated = {
       ...currentCountry,
-      gold: useCredits ? currentCountry.gold : currentCountry.gold - def.cost.gold,
-      iron: useCredits ? currentCountry.iron : currentCountry.iron - def.cost.iron,
-      oil: useCredits ? currentCountry.oil : currentCountry.oil - def.cost.oil,
+      gold: useCredits ? currentCountry.gold : currentCountry.gold - dynamicCost.gold,
+      iron: useCredits ? currentCountry.iron : currentCountry.iron - dynamicCost.iron,
+      oil: useCredits ? currentCountry.oil : currentCountry.oil - dynamicCost.oil,
       empireCredits: useCredits ? (currentCountry.empireCredits || 0) - 150 : (currentCountry.empireCredits || 0),
-      population: currentCountry.population + 15000, // attracts migrants
-      unemploymentRate: Math.max(2, currentCountry.unemploymentRate - 1.5) // creates jobs
+      population: currentCountry.population + 15000 * nextLevel, // attracts more migrants at higher levels
+      unemploymentRate: Math.max(2, currentCountry.unemploymentRate - 1.5 * nextLevel), // creates more jobs
+      buildings: updatedBuildings
     };
 
     try {
       await setDoc(doc(db, 'countries', currentCountry.id), updated);
-      alert(`⚡ تم تشييد منشأة [${def.arabicName}] فواً ودخولها الخدمة الميدانية العسكرية والأمنية بنجاح!`);
+      if (currentLevel === 0) {
+        alert(`⚡ تم تشييد منشأة [${def.arabicName}] فواً بمستوى 1 ودخولها الخدمة الميدانية العسكرية والأمنية بنجاح!`);
+      } else {
+        alert(`⚡ تم ترقية منشأة [${def.arabicName}] بنجاح إلى المستوى [${nextLevel}]!`);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `countries/${currentCountry.id}`);
     }
@@ -1127,13 +1159,30 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (defAntiAir * (UNIT_DEFS.antiAir?.defense || 80) * defAntiAirMod) +
         (defJet * UNIT_DEFS.jets.defense * defJetMod)) * (1 + defDefLvl * 0.15);
 
-      // Add Randomness and Defense Bonus (Defenders have an inherent +20% advantage and randomness ranges from 0.8x to 1.2x)
+      // Determine Winner and battle logs
+      const battleLog: string[] = [];
+      battleLog.push(`انقضت فترة التعبئة والاشتباك المباشر لمقاطعة [${target.name}].`);
+
+      // Add Randomness and Defense Bonus (Defenders have an inherent +40% advantage and randomness ranges from 0.8x to 1.2x)
       const attackVariance = 0.8 + (Math.random() * 0.4);
       const defenseVariance = 0.8 + (Math.random() * 0.4);
       
       const totalAttackStrength = rawAttackStrength * attackVariance;
       // Bunker level increases defense by 35% per level!
-      let totalDefenseStrength = rawDefenseStrength * defenseVariance * 1.2 * (1 + bunkerLevel * 0.35);
+      let totalDefenseStrength = rawDefenseStrength * defenseVariance * 1.4 * (1 + bunkerLevel * 0.35);
+
+      // Homeland Resistance Defense Bonus: If defending own native sovereign capital/provinces
+      const isDefendingHomeland = target.ownerCountryId && target.id.includes(target.ownerCountryId.slice(8, 11));
+      if (isDefendingHomeland) {
+        totalDefenseStrength *= 1.45;
+        battleLog.push(`⚔️ مقاومة شعبية باسلة: جنود ومواطنو [${defenderCountry?.name || 'الوطن'}] يستبسلون في حماية أراضيهم التاريخية والسيادية! (+45% دفاع المقاومة الشعبية).`);
+      }
+
+      // Active Human Player Defence Bonus
+      if (defenderCountry && !defenderCountry.isBot) {
+        totalDefenseStrength *= 1.4;
+        battleLog.push(`🛡️ غرفة العمليات المشتركة: القائد البشري لـ [${defenderCountry.name}] يقود التكتيك الميداني الدفاعي ويدير غرف العمليات والاتصال بمهارة فائقة! (+40% دعم لوجستي حربي بشري).`);
+      }
 
       // Geographical defense modifier
       if (target.type === 'mountain') {
@@ -1142,10 +1191,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         totalDefenseStrength *= 1.2; // Desert attrition bonus
       }
 
-      // Determine Winner and battle logs
+      // Determine Winner
       const won = totalAttackStrength > totalDefenseStrength;
-      const battleLog: string[] = [];
-      battleLog.push(`انقضت فترة التعبئة والاشتباك المباشر لمقاطعة [${target.name}].`);
       battleLog.push(`القوات الزاحفة لـ [${attackerCountry.name}] تقدّر بـ ${attInf + attSec + attTan + attArt + attAntiAir + attJet + attMissile} جندي وآلية بنظام نيران إجمالي قدره: ${Math.round(totalAttackStrength)} نقطة قوة.`);
       battleLog.push(`القوات المدافعة للخصم تقدّر بـ ${defInf + defSec + defTan + defArt + defAntiAir + defJet} جندي وآلية في الخنادق بنظام موازنة دفاعي قدره: ${Math.round(totalDefenseStrength)} نقطة.`);
 
@@ -1942,18 +1989,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       taxRate: 15,
       allianceId: null,
       allianceName: null,
-      army: {
-        infantry: 200,
-        specialForces: 20,
-        tanks: 12,
-        artillery: 15,
-        antiAir: 5,
-        jets: 5,
-        reconPlanes: 2,
-        warships: 1,
-        submarines: 1,
-        missiles: 1
-      },
+      army: getRealisticStartingArmy(chosenIso),
       createdAt: new Date().toISOString(),
       lastHarvestTime: new Date().toISOString(),
       isBot: true,
@@ -2078,6 +2114,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 5. Restore players back to standard initial parameters
       for (const co of countries) {
+        const iso = co.id.split('_')[1] || "EGY";
         await updateDoc(doc(db, 'countries', co.id), {
           gold: 1500,
           oil: 600,
@@ -2086,18 +2123,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           electricity: 100,
           allianceId: null,
           allianceName: null,
-          army: {
-            infantry: 150,
-            specialForces: 10,
-            tanks: 5,
-            artillery: 10,
-            antiAir: 0,
-            jets: 2,
-            reconPlanes: 0,
-            warships: 0,
-            submarines: 0,
-            missiles: 0
-          }
+          army: getRealisticStartingArmy(iso)
         });
       }
 
