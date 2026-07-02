@@ -935,6 +935,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Dispatch movement command immediately
       await updateUnitTarget(unitId, startLat, startLng, targetLat, targetLng, unitParams.speed);
 
+      const dLat = targetLat - startLat;
+      const dLng = targetLng - startLng;
+      const distance = Math.sqrt(dLat * dLat + dLng * dLng);
+      const timeToArriveMs = (distance / (unitParams.speed * 0.15)) * 1000;
+      const cSecs = Math.max(1, Math.round(timeToArriveMs / 1000));
+
       // Update player reserves and deduct resources
       await updateDoc(doc(db, 'countries', currentCountry.id), {
         army: playerArmy,
