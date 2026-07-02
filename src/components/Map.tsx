@@ -24,6 +24,16 @@ function isPointInPolygon(point: { x: number; y: number }, vs: [number, number][
   return inside;
 }
 
+// Preloaded unit icons for high-performance canvas rendering
+const preloadedSoldierImg = typeof window !== 'undefined' ? new Image() : null;
+if (preloadedSoldierImg) preloadedSoldierImg.src = '/icons/soldier.png';
+
+const preloadedTankImg = typeof window !== 'undefined' ? new Image() : null;
+if (preloadedTankImg) preloadedTankImg.src = '/icons/tank.png';
+
+const preloadedPlaneImg = typeof window !== 'undefined' ? new Image() : null;
+if (preloadedPlaneImg) preloadedPlaneImg.src = '/icons/military_plane.png';
+
 export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }) => {
   const { currentCountry, selectedMatchId, countries, spies, territories } = useGame();
 
@@ -837,161 +847,97 @@ export const Map: React.FC<MapProps> = ({ onSelectProvince, selectedProvinceId }
         const unit = primaryUnit;
 
         if (unit.type === 'soldier') {
-          // --- ULTRA-POLISHED TACTICAL SOLDIER ILLUSTRATION ---
-          // Military crosshair background
-          ctx.beginPath();
-          ctx.arc(sx, sy, size - 3, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
+          if (preloadedSoldierImg && preloadedSoldierImg.complete && preloadedSoldierImg.naturalWidth !== 0) {
+            ctx.drawImage(preloadedSoldierImg, sx - size + 2, sy - size + 2, (size - 2) * 2, (size - 2) * 2);
+          } else {
+            // --- ULTRA-POLISHED TACTICAL SOLDIER ILLUSTRATION ---
+            // Military crosshair background
+            ctx.beginPath();
+            ctx.arc(sx, sy, size - 3, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 1.0;
+            ctx.stroke();
 
-          // Draw head and helmet
-          ctx.beginPath();
-          ctx.arc(sx, sy - 3 + (bounceOffset * 0.3), 4, 0, Math.PI * 2);
-          ctx.fillStyle = uColor;
-          ctx.fill();
+            // Draw head and helmet
+            ctx.beginPath();
+            ctx.arc(sx, sy - 3 + (bounceOffset * 0.3), 4, 0, Math.PI * 2);
+            ctx.fillStyle = uColor;
+            ctx.fill();
 
-          // Glowing neon visor
-          ctx.beginPath();
-          ctx.ellipse(sx, sy - 3 + (bounceOffset * 0.3), 2.5, 1, 0, 0, Math.PI * 2);
-          ctx.fillStyle = '#22d3ee';
-          ctx.fill();
+            // Glowing neon visor
+            ctx.beginPath();
+            ctx.ellipse(sx, sy - 3 + (bounceOffset * 0.3), 2.5, 1, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#22d3ee';
+            ctx.fill();
 
-          // Body chest armor plate path
-          ctx.beginPath();
-          ctx.moveTo(sx - 5, sy + 6);
-          ctx.lineTo(sx + 5, sy + 6);
-          ctx.lineTo(sx + 3.5, sy + 1);
-          ctx.lineTo(sx - 3.5, sy + 1);
-          ctx.closePath();
-          ctx.fillStyle = uColor;
-          ctx.fill();
-
-          // Shoulder straps
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-          ctx.lineWidth = 0.8;
-          ctx.beginPath();
-          ctx.moveTo(sx - 2, sy + 1);
-          ctx.lineTo(sx - 3, sy + 6);
-          ctx.moveTo(sx + 2, sy + 1);
-          ctx.lineTo(sx + 3, sy + 6);
-          ctx.stroke();
-
-          // Double crossed infantry rifle representation
-          ctx.strokeStyle = '#94a3b8';
-          ctx.lineWidth = 1.0;
-          ctx.beginPath();
-          ctx.moveTo(sx - 4, sy + 3);
-          ctx.lineTo(sx + 4, sy - 1);
-          ctx.moveTo(sx + 4, sy + 3);
-          ctx.lineTo(sx - 4, sy - 1);
-          ctx.stroke();
+            // Body chest armor plate path
+            ctx.beginPath();
+            ctx.moveTo(sx - 5, sy + 6);
+            ctx.lineTo(sx + 5, sy + 6);
+            ctx.lineTo(sx + 3.5, sy + 1);
+            ctx.lineTo(sx - 3.5, sy + 1);
+            ctx.closePath();
+            ctx.fillStyle = uColor;
+            ctx.fill();
+          }
         } else if (unit.type === 'tank') {
-          // --- DETAILED IMMERSIVE HEAVY TANK ILLUSTRATION ---
-          // Left and right metallic treads
-          ctx.fillStyle = '#1e293b';
-          ctx.fillRect(sx - 9, sy - 6, 3, 12);
-          ctx.fillRect(sx + 6, sy - 6, 3, 12);
+          if (preloadedTankImg && preloadedTankImg.complete && preloadedTankImg.naturalWidth !== 0) {
+            ctx.drawImage(preloadedTankImg, sx - size + 2, sy - size + 2, (size - 2) * 2, (size - 2) * 2);
+          } else {
+            // --- DETAILED IMMERSIVE HEAVY TANK ILLUSTRATION ---
+            // Left and right metallic treads
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(sx - 9, sy - 6, 3, 12);
+            ctx.fillRect(sx + 6, sy - 6, 3, 12);
 
-          // Tread textures
-          ctx.fillStyle = '#475569';
-          for (let th = -5; th <= 5; th += 2) {
-            ctx.fillRect(sx - 9, sy + th, 3, 0.8);
-            ctx.fillRect(sx + 6, sy + th, 3, 0.8);
+            // Main tank steel armor chassis
+            ctx.fillStyle = uColor;
+            ctx.fillRect(sx - 6, sy - 5, 12, 10);
+
+            // Central core rotary turret cupola
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#1e293b';
+            ctx.fill();
           }
-
-          // Main tank steel armor chassis
-          ctx.fillStyle = uColor;
-          ctx.fillRect(sx - 6, sy - 5, 12, 10);
-
-          // Chassis panelling highlights
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-          ctx.lineWidth = 1.0;
-          ctx.strokeRect(sx - 5, sy - 4, 10, 8);
-
-          // Central core rotary turret cupola
-          ctx.beginPath();
-          ctx.arc(sx, sy, 3.5, 0, Math.PI * 2);
-          ctx.fillStyle = '#1e293b';
-          ctx.fill();
-          ctx.strokeStyle = uColor;
-          ctx.lineWidth = 1.2;
-          ctx.stroke();
-
-          // Rotating long-range barrel pointer facing target movement course
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          let targetAngle = -Math.PI / 2; // default pointing up
-          if (unit.targetLat !== null && unit.targetLng !== null) {
-            targetAngle = Math.atan2(unit.targetLat - unit.lat, unit.targetLng - unit.lng);
-          }
-          const barrelLen = size - 1;
-          const barrelEndX = sx + Math.cos(targetAngle) * barrelLen;
-          const barrelEndY = sy + Math.sin(targetAngle) * barrelLen;
-          ctx.lineTo(barrelEndX, barrelEndY);
-          ctx.strokeStyle = '#e2e8f0';
-          ctx.lineWidth = 2.2;
-          ctx.stroke();
-
-          // Barrel muzzle muzzle brake plate
-          ctx.beginPath();
-          ctx.arc(barrelEndX, barrelEndY, 2, 0, Math.PI * 2);
-          ctx.fillStyle = uColor;
-          ctx.fill();
         } else if (unit.type === 'jet') {
-          // --- STEALTH MULTIROLE FIGHTER JET ILLUSTRATION ---
-          // Calculate flight orientation heading angle
-          let flightAngle = -Math.PI / 2;
-          if (unit.targetLat !== null && unit.targetLng !== null) {
-            flightAngle = Math.atan2(unit.targetLat - unit.lat, unit.targetLng - unit.lng);
+          if (preloadedPlaneImg && preloadedPlaneImg.complete && preloadedPlaneImg.naturalWidth !== 0) {
+            let flightAngle = -Math.PI / 2;
+            if (unit.targetLat !== null && unit.targetLng !== null) {
+              flightAngle = Math.atan2(unit.targetLat - unit.lat, unit.targetLng - unit.lng);
+            }
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.rotate(flightAngle + Math.PI / 2); // Rotate to face direction
+            ctx.drawImage(preloadedPlaneImg, -size + 2, -size + 2, (size - 2) * 2, (size - 2) * 2);
+            ctx.restore();
+          } else {
+            // --- STEALTH MULTIROLE FIGHTER JET ILLUSTRATION ---
+            let flightAngle = -Math.PI / 2;
+            if (unit.targetLat !== null && unit.targetLng !== null) {
+              flightAngle = Math.atan2(unit.targetLat - unit.lat, unit.targetLng - unit.lng);
+            }
+
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.rotate(flightAngle);
+
+            // Wing profile
+            ctx.beginPath();
+            ctx.moveTo(8, 0);       // nose cone tip
+            ctx.lineTo(-3, 8);      // starboard wingtip
+            ctx.lineTo(-2, 3);      // fuselage fold inner
+            ctx.lineTo(-7, 4);      // tail starboard stabilator
+            ctx.lineTo(-6, 0);      // tail engines fold center
+            ctx.lineTo(-7, -4);     // tail port stabilator
+            ctx.lineTo(-2, -3);     // fuselage fold inner port
+            ctx.lineTo(-3, -8);     // port wingtip
+            ctx.closePath();
+
+            ctx.fillStyle = uColor;
+            ctx.fill();
+            ctx.restore();
           }
-
-          ctx.save();
-          ctx.translate(sx, sy);
-          ctx.rotate(flightAngle);
-
-          // Dynamic 60FPS afterburner jet core spark particles trailing
-          ctx.beginPath();
-          const flameSize = 4 + Math.random() * 5;
-          const gr = ctx.createLinearGradient(-11, 0, -5, 0);
-          gr.addColorStop(0, 'rgba(239, 68, 68, 0)');
-          gr.addColorStop(0.5, 'rgba(249, 115, 22, 0.9)');
-          gr.addColorStop(1, '#f59e0b');
-          ctx.fillStyle = gr;
-          ctx.moveTo(-6, -2);
-          ctx.lineTo(-6 - flameSize, 0);
-          ctx.lineTo(-6, 2);
-          ctx.closePath();
-          ctx.fill();
-
-          // Wing profile (Stealth F-22 Wingtips)
-          ctx.beginPath();
-          ctx.moveTo(8, 0);       // nose cone tip
-          ctx.lineTo(-3, 8);      // starboard wingtip
-          ctx.lineTo(-2, 3);      // fuselage fold inner
-          ctx.lineTo(-7, 4);      // tail starboard stabilator
-          ctx.lineTo(-6, 0);      // tail engines fold center
-          ctx.lineTo(-7, -4);     // tail port stabilator
-          ctx.lineTo(-2, -3);     // fuselage fold inner port
-          ctx.lineTo(-3, -8);     // port wingtip
-          ctx.closePath();
-
-          ctx.fillStyle = uColor;
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
-
-          // Modern cyan tinted cockpit bubble canopy
-          ctx.beginPath();
-          ctx.ellipse(2, 0, 3, 1.5, 0, 0, Math.PI * 2);
-          ctx.fillStyle = '#22d3ee';
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 0.5;
-          ctx.stroke();
-
-          ctx.restore();
         } else if (unit.type === 'missile') {
           // --- PROCEDURAL INTERCONTINENTAL BALLISTIC MISSILE (ICBM) ---
           let missileAngle = -Math.PI / 2;

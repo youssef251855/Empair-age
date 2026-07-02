@@ -87,8 +87,17 @@ export const MapTab: React.FC = () => {
     });
     if (hasSuccessfulSpy) return true;
 
+    // 5. If we have a friendly radar station within range of this province:
+    const hasRadarVision = territories.some(t => {
+      if (t.ownerCountryId !== currentCountry.id || !t.radarLevel || t.radarLevel <= 0) return false;
+      const range = t.radarLevel === 1 ? 12 : (t.radarLevel === 2 ? 25 : 45);
+      const dist = Math.sqrt(Math.pow(t.lat - selectedTerritory.lat, 2) + Math.pow(t.lng - selectedTerritory.lng, 2));
+      return dist <= range;
+    });
+    if (hasRadarVision) return true;
+
     return false;
-  }, [selectedTerritory, currentCountry, spies, countries]);
+  }, [selectedTerritory, currentCountry, spies, countries, territories]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Territory[]>([]);
 
@@ -393,6 +402,68 @@ export const MapTab: React.FC = () => {
     }
   };
 
+  const handleBuildFortification = async (type: 'bunker' | 'radar') => {
+    if (!selectedTerritory || !currentCountry) return;
+    
+    const currentLevel = type === 'bunker' 
+      ? (selectedTerritory.bunkerLevel || 0) 
+      : (selectedTerritory.radarLevel || 0);
+      
+    if (currentLevel >= 3) {
+      alert('تم الوصول للحد الأقصى للتطوير (المستوى 3) لهذه المنشأة!');
+      return;
+    }
+    
+    const nextLevel = currentLevel + 1;
+    
+    // Calculate costs (Conflict of Nations Style)
+    let ironCost = 0;
+    let goldCost = 0;
+    
+    if (type === 'bunker') {
+      if (nextLevel === 1) { ironCost = 200; goldCost = 150; }
+      else if (nextLevel === 2) { ironCost = 400; goldCost = 300; }
+      else if (nextLevel === 3) { ironCost = 800; goldCost = 600; }
+    } else {
+      if (nextLevel === 1) { ironCost = 100; goldCost = 150; }
+      else if (nextLevel === 2) { ironCost = 200; goldCost = 300; }
+      else if (nextLevel === 3) { ironCost = 400; goldCost = 600; }
+    }
+    
+    if (currentCountry.iron < ironCost || currentCountry.gold < goldCost) {
+      alert(`الموارد غير كافية! لتطوير المنشأة للمستوى ${nextLevel} تحتاج إلى: ${goldCost} 💰 ذهب و ${ironCost} ⛓️ حديد.`);
+      return;
+    }
+    
+    const confirm = window.confirm(`تأكيد التطوير: هل تريد ترقية ${type === 'bunker' ? 'المخابئ الحصينة' : 'منظومة الرادار الجوي'} للمستوى ${nextLevel} بتكلفة ${goldCost} ذهب و ${ironCost} حديد؟`);
+    if (!confirm) return;
+    
+    try {
+      // Deduct country resources
+      await updateDoc(doc(db, 'countries', currentCountry.id), {
+        gold: currentCountry.gold - goldCost,
+        iron: currentCountry.iron - ironCost
+      });
+      
+      // Upgrade territory building
+      const updateData: any = {};
+      if (type === 'bunker') {
+        updateData.bunkerLevel = nextLevel;
+      } else {
+        updateData.radarLevel = nextLevel;
+      }
+      
+      await updateDoc(doc(db, 'territories', selectedTerritory.id), {
+        ...updateData
+      });
+      
+      alert(`🎉 تم ترقية ${type === 'bunker' ? 'المخابئ الحصينة' : 'منظومة الرادار الجوي'} في [${selectedTerritory.name}] بنجاح إلى المستوى ${nextLevel}!`);
+    } catch (e: any) {
+      console.error(e);
+      alert('حدث خطأ أثناء الترقية: ' + e.message);
+    }
+  };
+
   const handleDiplomacy = async () => {
     if (!selectedTerritory || !selectedTerritory.ownerCountryId) return;
     const confirm = window.confirm(`هل تريد إرسال برقية معاهدة سلام علنية لدولة [${selectedTerritory.ownerCountryName}]؟`);
@@ -671,6 +742,34 @@ export const MapTab: React.FC = () => {
               )}
             </div>
 
+            {/* Province Infrastructure Stats for anyone to inspect (if visible) */}
+            {isGarrisonVisible && (
+              <div className="mb-4 bg-slate-950/30 p-3 rounded-lg border border-slate-900/60 flex flex-col gap-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">الروح المعنوية للمحافظة:</span>
+                  <span className={`font-mono font-bold ${
+                    (selectedTerritory.morale || 100) < 45 ? 'text-rose-500 animate-pulse' : 'text-slate-300'
+                  }`}>
+                    {selectedTerritory.morale !== undefined ? selectedTerritory.morale : 100}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">مستوى المخابئ (التحصين):</span>
+                  <span className="font-mono text-amber-400 font-bold flex items-center gap-1">
+                    <span>{selectedTerritory.bunkerLevel || 0} / 3</span>
+                    <span>🛡️</span>
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">مستوى الرادار المحمول:</span>
+                  <span className="font-mono text-cyan-400 font-bold flex items-center gap-1">
+                    <span>{selectedTerritory.radarLevel || 0} / 3</span>
+                    <span>📡</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Tactical Decisions Area based on Ownership */}
             <div className="border-t border-slate-800/80 pt-4">
               {selectedTerritory.ownerCountryId === currentCountry.id ? (
@@ -696,6 +795,102 @@ export const MapTab: React.FC = () => {
                       تنزيل للميدان المفتوح
                     </button>
                   </div>
+
+                  {(tacticalAction === 'info' || !tacticalAction) && (
+                    <div className="space-y-4 bg-slate-900/50 p-4 rounded-lg border border-slate-800/60 mb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          🛡️ البنية التحتية والتحصينات العسكرية:
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mb-3">
+                          قم ببناء المخابئ الحصينة لتعزيز دفاعات قواتك وخفض خسائرها، أو شبكات الرادار لكشف ضباب الحرب في القطاعات المجاورة.
+                        </p>
+                      </div>
+
+                      {/* Morale Status Display */}
+                      <div className="bg-slate-950/40 p-2.5 rounded border border-slate-900/80">
+                        <div className="flex justify-between items-center text-xs mb-1">
+                          <span className="text-slate-400">الروح المعنوية الإقليمية</span>
+                          <span className={`font-mono font-black ${
+                            (selectedTerritory.morale || 100) < 40 ? 'text-rose-500' : 
+                            (selectedTerritory.morale || 100) < 70 ? 'text-amber-400' : 'text-emerald-400'
+                          }`}>
+                            {selectedTerritory.morale !== undefined ? selectedTerritory.morale : 100}%
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-800 h-2 rounded overflow-hidden">
+                          <div 
+                            className={`h-full rounded transition-all duration-500 ${
+                              (selectedTerritory.morale || 100) < 40 ? 'bg-rose-500 animate-pulse' : 
+                              (selectedTerritory.morale || 100) < 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${selectedTerritory.morale !== undefined ? selectedTerritory.morale : 100}%` }}
+                          />
+                        </div>
+                        {(selectedTerritory.morale !== undefined && selectedTerritory.morale < 30) && (
+                          <p className="text-[9px] text-red-400 mt-1 animate-pulse leading-normal">
+                            ⚠️ روح معنوية منخفضة جداً! خطر اندلاع عصيان مسلح متمرد مرتفع!
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Bunker Level Upgrade Option */}
+                      <div className="flex items-center justify-between p-2.5 bg-slate-950/40 rounded border border-slate-900/80 gap-1.5">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-200">المخابئ والخنادق الحصينة</span>
+                            <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1 rounded font-bold font-mono">
+                              LVL {selectedTerritory.bunkerLevel || 0}/3
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-0.5 leading-normal">
+                            {(selectedTerritory.bunkerLevel || 0) === 0 ? '+35% دفاع وقوة نيران في الدفاع' : 
+                             (selectedTerritory.bunkerLevel || 0) === 1 ? '+70% دفاع و20% تقليص للخسائر' : 
+                             (selectedTerritory.bunkerLevel || 0) === 2 ? '+105% دفاع و40% تقليص للخسائر' : 
+                             'الحد الأقصى للتطوير (+105% دفاع و60% تقليص)'}
+                          </p>
+                        </div>
+                        {(selectedTerritory.bunkerLevel || 0) < 3 ? (
+                          <button
+                            onClick={() => handleBuildFortification('bunker')}
+                            className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded transition-all cursor-pointer shrink-0"
+                          >
+                            تطوير 🔨
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-emerald-400 font-bold shrink-0">مكتمل ✅</span>
+                        )}
+                      </div>
+
+                      {/* Radar Level Upgrade Option */}
+                      <div className="flex items-center justify-between p-2.5 bg-slate-950/40 rounded border border-slate-900/80 gap-1.5">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-200">منظومة الرادار الجوي</span>
+                            <span className="text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1 rounded font-bold font-mono">
+                              LVL {selectedTerritory.radarLevel || 0}/3
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 mt-0.5 leading-normal">
+                            {(selectedTerritory.radarLevel || 0) === 0 ? 'محيط كشف متواضع (12 درجة)' : 
+                             (selectedTerritory.radarLevel || 0) === 1 ? 'محيط كشف متوسط (25 درجة)' : 
+                             (selectedTerritory.radarLevel || 0) === 2 ? 'محيط كشف خارق (45 درجة)' : 
+                             'الحد الأقصى لكشف ضباب الحرب بالكامل'}
+                          </p>
+                        </div>
+                        {(selectedTerritory.radarLevel || 0) < 3 ? (
+                          <button
+                            onClick={() => handleBuildFortification('radar')}
+                            className="bg-cyan-500 hover:bg-cyan-600 active:scale-95 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded transition-all cursor-pointer shrink-0"
+                          >
+                            تطوير 📡
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-emerald-400 font-bold shrink-0">مكتمل ✅</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {tacticalAction === 'spawn' && (
                     <div className="space-y-3 bg-blue-950/40 border border-blue-800/60 p-3.5 rounded-lg">

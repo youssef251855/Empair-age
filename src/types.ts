@@ -49,6 +49,12 @@ export interface Country {
   isBanned?: boolean;
   isBot?: boolean;          // Whether controlled by a dynamic AI bot
   empireCredits: number;    // Premium Gold Credits currency 💎
+  research?: {
+    military: number;
+    defense: number;
+    economy: number;
+    production: number;
+  };
 }
 
 export interface Army {
@@ -88,6 +94,9 @@ export interface Territory {
   defenseValue?: number; // 🛡 Defense value
   occupationProgress?: number; // 0 to 100
   occupyingCountryId?: string | null;
+  morale?: number;
+  bunkerLevel?: number;
+  radarLevel?: number;
 }
 
 export interface Garrison {

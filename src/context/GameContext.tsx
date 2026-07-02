@@ -482,18 +482,69 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let powerTotal = 25;
 
     // Build contributions
-    // Assume standard set of buildings built inside regions
-    // We can simulate building efficiency simply based on country level / stats
-    const researchMultiplier = 1.0 + (currentCountry.taxRate / 100);
+    const taxRate = currentCountry.taxRate || 20;
+    // Morale change based on tax rate: low taxes boost morale, excessive taxes drain it
+    const moraleChange = taxRate > 60 ? -5 : (taxRate > 45 ? -2 : (taxRate < 20 ? 6 : 4));
 
     // Dynamic bonuses from occupied territories specialization
-    ownedTerritories.forEach((t) => {
+    ownedTerritories.forEach(async (t) => {
+      const currentMorale = t.morale !== undefined ? t.morale : 100;
+      const nextMorale = Math.max(0, Math.min(100, currentMorale + moraleChange));
+
+      // 12% rebellion chance if morale is dangerously low (< 30)
+      if (nextMorale < 30 && Math.random() < 0.12) {
+        try {
+          // Trigger Rebel uprising!
+          await updateDoc(doc(db, 'territories', t.id), {
+            ownerCountryId: 'rebels',
+            ownerCountryName: 'متمردون مسلحون',
+            color: '#3b0764', // Dark Purple for Rebels
+            bunkerLevel: 0,
+            radarLevel: 0,
+            morale: 40,
+            garrison: {
+              infantry: 12,
+              tanks: 2,
+              jets: 0,
+              specialForces: 0,
+              artillery: 0,
+              antiAir: 0,
+              missiles: 0
+            }
+          });
+          // Send public alert about rebellion
+          await addDoc(collection(db, 'messages'), {
+            matchId: selectedMatchId || 'default',
+            senderName: 'الاستخبارات العسكرية',
+            text: `⚠️ اندلعت ثورة متمردين مسلحة في مقاطعة [${t.name}] بسبب تدهور الروح المعنوية والضرائب الجائرة! سقطت ثكنات الحامية بالكامل.`,
+            timestamp: new Date().toISOString()
+          });
+        } catch (e) {
+          console.error("Rebellion trigger error:", e);
+        }
+        return;
+      }
+
+      // Save morale updates to DB
+      if (nextMorale !== currentMorale) {
+        try {
+          await updateDoc(doc(db, 'territories', t.id), {
+            morale: nextMorale
+          });
+        } catch (e) {
+          console.error("Failed to update morale tick:", e);
+        }
+      }
+
       const mult = t.resourceMultiplier || 1.0;
-      if (t.resourceSpecialty === 'gold') goldGain += 10 * mult;
-      if (t.resourceSpecialty === 'oil') oilGain += 10 * mult;
-      if (t.resourceSpecialty === 'iron') ironGain += 10 * mult;
-      if (t.resourceSpecialty === 'food') foodGain += 15 * mult;
-      if (t.resourceSpecialty === 'electricity') powerTotal += 15 * mult;
+      // Morale directly scales down production! Low morale = heavy industrial strike/low yield
+      const moraleFactor = nextMorale / 100;
+
+      if (t.resourceSpecialty === 'gold') goldGain += 10 * mult * moraleFactor;
+      if (t.resourceSpecialty === 'oil') oilGain += 10 * mult * moraleFactor;
+      if (t.resourceSpecialty === 'iron') ironGain += 10 * mult * moraleFactor;
+      if (t.resourceSpecialty === 'food') foodGain += 15 * mult * moraleFactor;
+      if (t.resourceSpecialty === 'electricity') powerTotal += 15 * mult * moraleFactor;
     });
 
     // Handle high unemployment penalty or tax collection yields
@@ -1042,29 +1093,47 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const attAntiAirMod = defJet > 0 ? 2.0 : 0.5;
       const defAntiAirMod = attJet > 0 || attMissile > 0 ? 2.0 : 0.5;
 
+      // Fetch defender country to check their defensive research
+      let defenderCountry: Country | null = null;
+      if (target.ownerCountryId) {
+        try {
+          const defenderSnap = await getDoc(doc(db, 'countries', target.ownerCountryId));
+          if (defenderSnap.exists()) {
+            defenderCountry = defenderSnap.data() as Country;
+          }
+        } catch (e) {
+          console.warn("Defender country load failed:", e);
+        }
+      }
+
+      const attMilLvl = attackerCountry.research?.military || 0;
+      const defDefLvl = defenderCountry?.research?.defense || 0;
+      const bunkerLevel = target.bunkerLevel || 0;
+
       const rawAttackStrength = 
-        (attInf * UNIT_DEFS.infantry.power * attInfMod) +
+        ((attInf * UNIT_DEFS.infantry.power * attInfMod) +
         (attSec * UNIT_DEFS.specialForces.power) +
         (attTan * UNIT_DEFS.tanks.power * attTanMod) +
         (attArt * UNIT_DEFS.artillery.power) +
         (attAntiAir * UNIT_DEFS.antiAir.power * attAntiAirMod) +
         (attJet * UNIT_DEFS.jets.power * attJetMod) +
-        (attMissile * UNIT_DEFS.missiles.power);
+        (attMissile * UNIT_DEFS.missiles.power)) * (1 + attMilLvl * 0.15);
         
       const rawDefenseStrength = 
-        (defInf * UNIT_DEFS.infantry.defense * defInfMod) +
+        ((defInf * UNIT_DEFS.infantry.defense * defInfMod) +
         (defSec * UNIT_DEFS.specialForces.defense) +
         (defTan * UNIT_DEFS.tanks.defense * defTanMod) +
         (defArt * UNIT_DEFS.artillery.defense) +
         (defAntiAir * (UNIT_DEFS.antiAir?.defense || 80) * defAntiAirMod) +
-        (defJet * UNIT_DEFS.jets.defense * defJetMod);
+        (defJet * UNIT_DEFS.jets.defense * defJetMod)) * (1 + defDefLvl * 0.15);
 
       // Add Randomness and Defense Bonus (Defenders have an inherent +20% advantage and randomness ranges from 0.8x to 1.2x)
       const attackVariance = 0.8 + (Math.random() * 0.4);
       const defenseVariance = 0.8 + (Math.random() * 0.4);
       
       const totalAttackStrength = rawAttackStrength * attackVariance;
-      let totalDefenseStrength = rawDefenseStrength * defenseVariance * 1.2;
+      // Bunker level increases defense by 35% per level!
+      let totalDefenseStrength = rawDefenseStrength * defenseVariance * 1.2 * (1 + bunkerLevel * 0.35);
 
       // Geographical defense modifier
       if (target.type === 'mountain') {
@@ -1102,6 +1171,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         battleLog.push(`فشل الهجوم الجبهوي! صمدت قوات الدفاع في الخنادق وهُزمت الكتائب الغازية على أسوار الحصن الدفاعي للمقاطعة.`);
       }
 
+      // Bunker level reduces defending casualties by 20% per level (up to 60% reduction)!
+      const finalDefLossRatio = defLossRatio * Math.max(0.4, 1 - (bunkerLevel * 0.2));
+
       // Attacking survivors
       const finalAtt: Partial<Army> = {
         infantry: Math.max(0, Math.round(attInf * (1 - attLossRatio))),
@@ -1115,14 +1187,62 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Defending survivors
       const finalDef: Garrison = {
-        infantry: Math.max(0, Math.round(defInf * (1 - defLossRatio))),
-        specialForces: Math.max(0, Math.round(defSec * (1 - defLossRatio))),
-        tanks: Math.max(0, Math.round(defTan * (1 - defLossRatio))),
-        artillery: Math.max(0, Math.round(defArt * (1 - defLossRatio))),
-        antiAir: Math.max(0, Math.round(defAntiAir * (1 - defLossRatio))),
-        jets: Math.max(0, Math.round(defJet * (1 - defLossRatio))),
+        infantry: Math.max(0, Math.round(defInf * (1 - finalDefLossRatio))),
+        specialForces: Math.max(0, Math.round(defSec * (1 - finalDefLossRatio))),
+        tanks: Math.max(0, Math.round(defTan * (1 - finalDefLossRatio))),
+        artillery: Math.max(0, Math.round(defArt * (1 - finalDefLossRatio))),
+        antiAir: Math.max(0, Math.round(defAntiAir * (1 - finalDefLossRatio))),
+        jets: Math.max(0, Math.round(defJet * (1 - finalDefLossRatio))),
         missiles: target.garrison.missiles || 0 // missiles not used in defense
       };
+
+      // Accumulate casualties durably on both countries
+      const attLostInf = attInf - (finalAtt.infantry || 0);
+      const attLostSF = attSec - (finalAtt.specialForces || 0);
+      const attLostTanks = attTan - (finalAtt.tanks || 0);
+      const attLostArt = attArt - (finalAtt.artillery || 0);
+      const attLostAA = attAntiAir - (finalAtt.antiAir || 0);
+      const attLostJets = attJet - (finalAtt.jets || 0);
+      const attLostMiss = attMissile - (finalAtt.missiles || 0);
+
+      const defLostInf = defInf - finalDef.infantry;
+      const defLostSF = defSec - finalDef.specialForces;
+      const defLostTanks = defTan - finalDef.tanks;
+      const defLostArt = defArt - finalDef.artillery;
+      const defLostAA = defAntiAir - finalDef.antiAir;
+      const defLostJets = defJet - finalDef.jets;
+
+      try {
+        const attCas = attackerCountry.casualties || { infantry: 0, specialForces: 0, tanks: 0, artillery: 0, antiAir: 0, jets: 0, missiles: 0 };
+        await updateDoc(attackerRef, {
+          casualties: {
+            infantry: (attCas.infantry || 0) + attLostInf,
+            specialForces: (attCas.specialForces || 0) + attLostSF,
+            tanks: (attCas.tanks || 0) + attLostTanks,
+            artillery: (attCas.artillery || 0) + attLostArt,
+            antiAir: (attCas.antiAir || 0) + attLostAA,
+            jets: (attCas.jets || 0) + attLostJets,
+            missiles: (attCas.missiles || 0) + attLostMiss,
+          }
+        });
+
+        if (defenderCountry) {
+          const defCas = defenderCountry.casualties || { infantry: 0, specialForces: 0, tanks: 0, artillery: 0, antiAir: 0, jets: 0, missiles: 0 };
+          await updateDoc(doc(db, 'countries', defenderCountry.id), {
+            casualties: {
+              infantry: (defCas.infantry || 0) + defLostInf,
+              specialForces: (defCas.specialForces || 0) + defLostSF,
+              tanks: (defCas.tanks || 0) + defLostTanks,
+              artillery: (defCas.artillery || 0) + defLostArt,
+              antiAir: (defCas.antiAir || 0) + defLostAA,
+              jets: (defCas.jets || 0) + defLostJets,
+              missiles: defCas.missiles || 0
+            }
+          });
+        }
+      } catch (e) {
+        console.error("Failed to write battle casualties:", e);
+      }
 
       const stolen = { gold: 0, oil: 0, iron: 0, food: 0 };
 

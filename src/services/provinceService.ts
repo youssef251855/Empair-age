@@ -203,7 +203,10 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
         oil: Math.floor(20 + Math.random() * 150),
         food: Math.floor(80 + Math.random() * 300),
         iron: Math.floor(30 + Math.random() * 180),
-        matchId: matchId
+        matchId: matchId,
+        morale: 100,
+        bunkerLevel: 0,
+        radarLevel: 0
       };
 
       const docRef = doc(db, 'territories', docId);
@@ -237,7 +240,10 @@ export async function captureProvinceState(
       ownerCountryName: occupyingCountry.name,
       flagEmoji: occupyingCountry.flagUrl || '🎌',
       color: occupyingCountry.color || '#3b82f6',
-      garrison: conqueredGarrison
+      garrison: conqueredGarrison,
+      morale: 25,
+      bunkerLevel: 0,
+      radarLevel: 0
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `territories/${provinceId}`);
