@@ -30,7 +30,22 @@ export interface Country {
   iron: number;
   food: number;
   electricity: number; // current availability
-  population: number;
+  // Advanced Population System
+  populationSystem?: {
+    total: number;
+    civilian: number;
+    conscriptable: number;
+    birthRate: number; // percentage
+    deathRate: number; // percentage
+    growthRate: number; // percentage
+    happiness: number; // percentage (0 - 100)
+    education: number; // percentage (0 - 100)
+    health: number; // percentage (0 - 100)
+    loyalty: number; // percentage (0 - 100)
+    density: number; // generic index or people/sq km
+  };
+  population: number; // Keep for backward compatibility or replace entirely. We will keep it but sync with populationSystem.total
+
   unemploymentRate: number; // percentage (0 - 100)
   taxRate: number; // percentage (typically 5 - 30)
   

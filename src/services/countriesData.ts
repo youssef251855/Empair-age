@@ -347,3 +347,99 @@ export function getRealisticStartingArmy(iso: string): {
     missiles: c.missiles ?? base.missiles
   };
 }
+
+export function getRealisticPopulationSystem(iso: string) {
+  // Approximate actual real-world populations for major countries (in millions to be multiplied)
+  const realPops: Record<string, number> = {
+    CHN: 1400000000,
+    IND: 1420000000,
+    USA: 335000000,
+    IDN: 275000000,
+    PAK: 235000000,
+    BRA: 215000000,
+    NGA: 218000000,
+    BGD: 171000000,
+    RUS: 144000000,
+    MEX: 128000000,
+    JPN: 125000000,
+    ETH: 123000000,
+    PHL: 115000000,
+    EGY: 111000000,
+    VNM: 98000000,
+    COD: 99000000,
+    TUR: 85000000,
+    IRN: 88000000,
+    DEU: 83000000,
+    THA: 71000000,
+    GBR: 67000000,
+    FRA: 68000000,
+    ITA: 59000000,
+    TZA: 65000000,
+    ZAF: 60000000,
+    KOR: 51000000,
+    COL: 52000000,
+    ESP: 47000000,
+    UGA: 47000000,
+    ARG: 46000000,
+    DZA: 44000000,
+    SDN: 46000000,
+    UKR: 38000000,
+    IRQ: 44000000,
+    CAN: 38000000,
+    POL: 38000000,
+    MAR: 37000000,
+    SAU: 36000000,
+    UZB: 35000000,
+    PER: 34000000,
+    MYS: 33000000,
+    YEM: 33000000,
+    VEN: 28000000,
+    MDG: 29000000,
+    CMR: 27000000,
+    CIV: 28000000,
+    PRK: 26000000,
+    AUS: 26000000,
+    TWN: 23000000,
+    SYR: 22000000,
+    LKA: 22000000,
+    KAZ: 19000000,
+    CHL: 19000000,
+    ROU: 19000000,
+    SEN: 17000000,
+    NLD: 17000000,
+    GTM: 17000000,
+    KHM: 16000000,
+    ECU: 18000000,
+    ZWE: 16000000,
+    GNQ: 1000000,
+    LBN: 5000000,
+    QAT: 2000000,
+    KWT: 4000000,
+    OMN: 4000000,
+    ARE: 9000000,
+    ISR: 9000000,
+    JOR: 11000000,
+  };
+
+  const basePop = realPops[iso] || (5000000 + Math.floor(Math.random() * 15000000));
+  
+  const variance = 0.95 + Math.random() * 0.1; // 0.95 to 1.05
+  const total = Math.floor(basePop * variance);
+  const conscriptablePercentage = 0.15; // 15% conscriptable base
+  const conscriptable = Math.floor(total * conscriptablePercentage);
+  const civilian = total - conscriptable;
+  
+  return {
+    total,
+    civilian,
+    conscriptable,
+    birthRate: 0.02,
+    deathRate: 0.008,
+    growthRate: 0.012,
+    happiness: 60 + Math.floor(Math.random() * 20),
+    education: 50 + Math.floor(Math.random() * 30),
+    health: 60 + Math.floor(Math.random() * 25),
+    loyalty: 70 + Math.floor(Math.random() * 20),
+    density: 20 + Math.floor(Math.random() * 100),
+  };
+}

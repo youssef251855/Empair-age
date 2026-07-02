@@ -56,7 +56,7 @@ import {
   WORLD_EVENT_TEMPLATES, 
   RESEARCH_TECHS 
 } from '../lib/gameData';
-import { SOVEREIGN_CONFIGS, getRealisticStartingArmy } from '../services/countriesData';
+import { SOVEREIGN_CONFIGS, getRealisticStartingArmy, getRealisticPopulationSystem } from '../services/countriesData';
 
 interface GameContextType {
   currentUser: FirebaseUser | null;
@@ -565,8 +565,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Handle high unemployment penalty or tax collection yields
-    const popRate = currentCountry.population || 500000;
-    const taxesCollected = Math.floor((popRate / 10000) * (currentCountry.taxRate / 10));
+    const popSys = currentCountry.populationSystem;
+    const taxesCollected = popSys 
+      ? Math.floor((popSys.civilian / 1000000) * 50 * (currentCountry.taxRate / 10)) 
+      : Math.floor((currentCountry.population / 10000) * (currentCountry.taxRate / 10));
     goldGain += taxesCollected;
 
     // Apply simple decay / maintenance penalty
@@ -580,10 +582,40 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     goldGain = Math.max(0, goldGain - Math.floor(armyMaintenance * 0.5));
 
     // Offline checking & ticking state incrementation
-    // Also increase population gradually realistically
-    const popGrowthRate = 0.0005; // 0.05% growth per tick
-    const actPop = currentCountry.population || 500000;
-    const newPop = Math.floor(actPop + (actPop * popGrowthRate));
+    // Also increase population gradually realistically using advanced POPULATION_CONFIG logic if available
+    let updatedPopSys = popSys ? { ...popSys } : undefined;
+    let newPop = currentCountry.population;
+
+    if (updatedPopSys) {
+      // Calculate growth realistically
+      // Note: 1 tick = small duration, so we scale the growth rate per tick
+      const tickGrowthScale = 0.0001; // small scale for tick
+      
+      const birthGrowth = Math.floor(updatedPopSys.total * (updatedPopSys.birthRate * tickGrowthScale));
+      const deathDecline = Math.floor(updatedPopSys.total * (updatedPopSys.deathRate * tickGrowthScale));
+      
+      updatedPopSys.total = updatedPopSys.total + birthGrowth - deathDecline;
+      
+      // Update ratios
+      const conscriptablePercentage = 0.15; // fixed base
+      updatedPopSys.conscriptable = Math.floor(updatedPopSys.total * conscriptablePercentage);
+      updatedPopSys.civilian = updatedPopSys.total - updatedPopSys.conscriptable;
+      
+      // Affect loyalty/happiness based on taxRate
+      if (currentCountry.taxRate > 50) {
+        updatedPopSys.happiness = Math.max(0, updatedPopSys.happiness - 1);
+        updatedPopSys.loyalty = Math.max(0, updatedPopSys.loyalty - 1);
+      } else if (currentCountry.taxRate < 20) {
+        updatedPopSys.happiness = Math.min(100, updatedPopSys.happiness + 1);
+        updatedPopSys.loyalty = Math.min(100, updatedPopSys.loyalty + 1);
+      }
+
+      newPop = updatedPopSys.total;
+    } else {
+      const popGrowthRate = 0.0005; // fallback
+      const actPop = currentCountry.population || 500000;
+      newPop = Math.floor(actPop + (actPop * popGrowthRate));
+    }
 
     const updated = {
       ...currentCountry,
@@ -592,7 +624,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       iron: Math.floor(currentCountry.iron + ironGain),
       food: Math.floor(currentCountry.food + foodGain),
       electricity: Math.min(500, currentCountry.electricity + powerTotal),
-      population: newPop
+      population: newPop,
+      populationSystem: updatedPopSys
     };
 
     // Save back to db after caching or immediately (every 30s we can trigger auto-db save)
@@ -604,6 +637,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         food: updated.food,
         electricity: updated.electricity,
         population: updated.population,
+        populationSystem: updated.populationSystem || null,
         lastHarvestTime: new Date().toISOString()
       });
     } catch(err) {
@@ -708,6 +742,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Otherwise create custom from scratch
     const countryId = `country_${currentUser.uid.slice(0, 6)}_${selectedMatchId}`;
+    const popSys = getRealisticPopulationSystem("EGY");
     const initCountry: Country & { matchId: string } = {
       id: countryId,
       userId: currentUser.uid,
@@ -723,7 +758,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       iron: 1200,
       food: 1500,
       electricity: 100,
-      population: 1500000,
+      populationSystem: popSys,
+      population: popSys.total,
       unemploymentRate: 10,
       taxRate: 15,
       allianceId: null,
@@ -848,6 +884,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       food: def.cost.food * count
     };
 
+    // Calculate Manpower needed (roughly 1000 for infantry, 200 for special forces, 50 for vehicles)
+    let manpowerCostPerUnit = 50;
+    if (unitType === 'infantry') manpowerCostPerUnit = 1000;
+    if (unitType === 'specialForces') manpowerCostPerUnit = 200;
+    
+    const totalManpowerNeeded = count * manpowerCostPerUnit;
+
     if (
       currentCountry.gold < totalCost.gold || 
       currentCountry.iron < totalCost.iron || 
@@ -855,6 +898,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentCountry.food < totalCost.food
     ) {
       alert("عذراً؛ نقص في المعادن الاستراتيجية أو الخزانة للتمكن من حشد هذا الحجم للجيوش!");
+      return;
+    }
+
+    // Check manpower if populationSystem is enabled
+    const popSys = currentCountry.populationSystem ? { ...currentCountry.populationSystem } : undefined;
+    if (popSys) {
+      if (popSys.conscriptable < totalManpowerNeeded) {
+        alert(`لا يوجد عدد كافٍ من الشباب القابلين للتجنيد! (المطلوب: ${totalManpowerNeeded.toLocaleString()}، المتاح: ${popSys.conscriptable.toLocaleString()})`);
+        return;
+      }
+      popSys.conscriptable -= totalManpowerNeeded;
+      popSys.total -= totalManpowerNeeded; // Move from civilian/reserve to military service
+    } else if (currentCountry.population < totalManpowerNeeded) {
+      alert("التعداد السكاني لا يكفي للتجنيد!");
       return;
     }
 
@@ -867,7 +924,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       iron: currentCountry.iron - totalCost.iron,
       oil: currentCountry.oil - totalCost.oil,
       food: currentCountry.food - totalCost.food,
-      army: newArmy
+      army: newArmy,
+      populationSystem: popSys || null,
+      population: popSys ? popSys.total : currentCountry.population - totalManpowerNeeded
     };
 
     try {
@@ -1275,6 +1334,25 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (defenderCountry) {
           const defCas = defenderCountry.casualties || { infantry: 0, specialForces: 0, tanks: 0, artillery: 0, antiAir: 0, jets: 0, missiles: 0 };
+          
+          let popSysUpdate = undefined;
+          let popUpdate = defenderCountry.population;
+
+          if (defenderCountry.populationSystem) {
+             const popSys = { ...defenderCountry.populationSystem };
+             // Civilians die from artillery and jet bombings (collateral damage)
+             const civilianCasualties = Math.floor((attArt * 15) + (attJet * 50) + (attTan * 5));
+             popSys.civilian = Math.max(0, popSys.civilian - civilianCasualties);
+             popSys.total = popSys.conscriptable + popSys.civilian;
+             popSys.loyalty = Math.max(0, popSys.loyalty - 2);
+             popSys.happiness = Math.max(0, popSys.happiness - 5);
+             popSysUpdate = popSys;
+             popUpdate = popSys.total;
+             if (civilianCasualties > 0) {
+               battleLog.push(`⚠️ أسفر القصف المدفعي والجوي العنيف عن استشهاد ${civilianCasualties.toLocaleString()} من المدنيين، وتراجع الاستقرار الداخلي.`);
+             }
+          }
+
           await updateDoc(doc(db, 'countries', defenderCountry.id), {
             casualties: {
               infantry: (defCas.infantry || 0) + defLostInf,
@@ -1284,7 +1362,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               antiAir: (defCas.antiAir || 0) + defLostAA,
               jets: (defCas.jets || 0) + defLostJets,
               missiles: defCas.missiles || 0
-            }
+            },
+            ...(popSysUpdate && { populationSystem: popSysUpdate, population: popUpdate })
           });
         }
       } catch (e) {
@@ -1968,6 +2047,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const countryId = `country_${chosenIso}_${selectedMatchId}`;
+    const popSys = getRealisticPopulationSystem(chosenIso);
 
     const newBotCountry: Country & { matchId: string } = {
       id: countryId,
@@ -1984,7 +2064,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       iron: 2500,
       food: 3000,
       electricity: 200,
-      population: 3000000,
+      populationSystem: popSys,
+      population: popSys.total,
       unemploymentRate: 5,
       taxRate: 15,
       allianceId: null,

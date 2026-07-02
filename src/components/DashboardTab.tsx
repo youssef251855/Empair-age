@@ -122,9 +122,9 @@ export const DashboardTab: React.FC = () => {
           <div>
             <p className="text-xs text-slate-400">التعداد الوطني العام</p>
             <h4 className="text-xl font-black text-slate-100 mt-1 font-mono">
-              {currentCountry.population.toLocaleString()} <span className="text-xs font-normal">نسمة</span>
+              {currentCountry.populationSystem?.total.toLocaleString() || currentCountry.population.toLocaleString()} <span className="text-xs font-normal">نسمة</span>
             </h4>
-            <p className="text-[10px] text-emerald-400 mt-0.5">📈 نمو إيجابي مستمر</p>
+            <p className="text-[10px] text-emerald-400 mt-0.5">📈 نمو (+{currentCountry.populationSystem ? (currentCountry.populationSystem.growthRate * 100).toFixed(2) : '0.05'}%)</p>
           </div>
           <Users className="text-cyan-400 w-10 h-10 bg-cyan-950/40 p-2 rounded-lg" />
         </div>
@@ -148,7 +148,7 @@ export const DashboardTab: React.FC = () => {
             <h4 className="text-xl font-black text-slate-100 mt-1 font-mono">
               {currentCountry.taxRate}%
             </h4>
-            <p className="text-[10px] text-amber-400 mt-0.5">العائد/ساعة: +{Math.floor((currentCountry.population / 10000) * (currentCountry.taxRate / 10))} ذهب</p>
+            <p className="text-[10px] text-amber-400 mt-0.5">العائد/ساعة: +{currentCountry.populationSystem ? Math.floor((currentCountry.populationSystem.civilian / 1000000) * 50 * (currentCountry.taxRate / 10)) : Math.floor((currentCountry.population / 10000) * (currentCountry.taxRate / 10))} ذهب</p>
           </div>
           <Percent className="text-amber-400 w-10 h-10 bg-amber-950/40 p-2 rounded-lg" />
         </div>
@@ -164,8 +164,76 @@ export const DashboardTab: React.FC = () => {
           </div>
           <Zap className="text-yellow-400 w-10 h-10 bg-yellow-950/40 p-2 rounded-lg" />
         </div>
-
       </div>
+
+      {/* Advanced Demographics (Population System) */}
+      {currentCountry.populationSystem && (
+        <div className="bg-[#0b101a] border border-slate-800 rounded-xl overflow-hidden shadow-xl mt-6 mb-6">
+          <div className="bg-gradient-to-r from-slate-900 to-[#1e293b] p-3 border-b border-slate-800 flex items-center gap-2">
+            <Users className="text-cyan-400 w-5 h-5" />
+            <h3 className="font-bold text-slate-100 text-sm">إدارة الشؤون السكانية والديموغرافية</h3>
+          </div>
+          <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 shadow-inner">
+              <p className="text-xs text-slate-400 mb-1">السكان المدنيين (قوة العمل)</p>
+              <p className="text-lg font-bold text-slate-200 font-mono">{currentCountry.populationSystem.civilian.toLocaleString()}</p>
+            </div>
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 shadow-inner">
+              <p className="text-xs text-slate-400 mb-1">القوة القابلة للتجنيد (احتياط)</p>
+              <p className="text-lg font-bold text-rose-400 font-mono">{currentCountry.populationSystem.conscriptable.toLocaleString()}</p>
+            </div>
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 shadow-inner">
+              <p className="text-xs text-slate-400 mb-1">الولاء الوطني</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-emerald-500 h-full" style={{ width: `${currentCountry.populationSystem.loyalty}%` }}></div>
+                </div>
+                <span className="text-sm font-mono text-emerald-400">{currentCountry.populationSystem.loyalty}%</span>
+              </div>
+            </div>
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 shadow-inner">
+              <p className="text-xs text-slate-400 mb-1">مؤشر السعادة</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-amber-400 h-full" style={{ width: `${currentCountry.populationSystem.happiness}%` }}></div>
+                </div>
+                <span className="text-sm font-mono text-amber-400">{currentCountry.populationSystem.happiness}%</span>
+              </div>
+            </div>
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 shadow-inner">
+              <p className="text-xs text-slate-400 mb-1">مؤشر التعليم</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-blue-400 h-full" style={{ width: `${currentCountry.populationSystem.education}%` }}></div>
+                </div>
+                <span className="text-sm font-mono text-blue-400">{currentCountry.populationSystem.education}%</span>
+              </div>
+            </div>
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 shadow-inner">
+              <p className="text-xs text-slate-400 mb-1">مؤشر الصحة العامة</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-green-400 h-full" style={{ width: `${currentCountry.populationSystem.health}%` }}></div>
+                </div>
+                <span className="text-sm font-mono text-green-400">{currentCountry.populationSystem.health}%</span>
+              </div>
+            </div>
+            <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-800/50 col-span-2 flex justify-between items-center shadow-inner">
+              <div>
+                <p className="text-xs text-slate-400 mb-1">التغير الديموغرافي السنوي</p>
+                <div className="flex gap-4">
+                  <p className="text-sm text-emerald-400 font-mono">مواليد: {(currentCountry.populationSystem.birthRate * 100).toFixed(1)}%</p>
+                  <p className="text-sm text-rose-400 font-mono">وفيات: {(currentCountry.populationSystem.deathRate * 100).toFixed(1)}%</p>
+                </div>
+              </div>
+              <div className="text-left" dir="ltr">
+                <p className="text-xs text-slate-400 mb-1 text-right">الكثافة السكانية</p>
+                <p className="text-sm text-slate-300 font-mono">{currentCountry.populationSystem.density} <span className="text-[10px]">نسمة/كم²</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Construction and Army Training Cabinets split */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

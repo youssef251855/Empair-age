@@ -1,6 +1,6 @@
 import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs, writeBatch, query, where, db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Territory, Garrison, Country, ResourceType } from '../types';
-import { SOVEREIGN_CONFIGS, getRealisticStartingArmy } from './countriesData';
+import { SOVEREIGN_CONFIGS, getRealisticStartingArmy, getRealisticPopulationSystem } from './countriesData';
 
 // Types representing Leaflet-based Province Extensions
 export interface ProvinceState extends Territory {
@@ -97,6 +97,7 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
         desc: 'دولة ناشطة بالامبراطورية السياسية.'
       };
 
+      const popSys = getRealisticPopulationSystem(iso);
       const countryDocId = `country_${iso}_${matchId}`;
       const botCountry = {
         id: countryDocId,
@@ -113,7 +114,8 @@ export async function seedProvincesFromGeoJSON(geojsonData: any, matchId: string
         iron: 1200,
         food: 1200,
         electricity: 100,
-        population: 4500000,
+        populationSystem: popSys,
+        population: popSys.total,
         unemploymentRate: 5,
         taxRate: 15,
         allianceId: null,
